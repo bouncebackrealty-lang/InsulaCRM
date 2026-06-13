@@ -10,6 +10,39 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/css/tabler.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/css/tabler-vendors.min.css">
     <style>
+
+        :root {
+        --tblr-primary: #1B2A4A;
+        --tblr-primary-rgb: 27, 42, 74;
+        --tblr-primary-fg: #ffffff;
+
+        --tblr-accent: #C9A84C;
+        --tblr-link-color: #C9A84C;
+        --tblr-link-hover-color: #b8943f;
+        }
+
+        .navbar-vertical,
+        .navbar {
+            background-color: #1B2A4A !important;
+        }
+
+        .nav-link.active,
+        .nav-item.active > .nav-link {
+            color: #C9A84C !important;
+            border-left: 3px solid #C9A84C;
+        }
+
+        .btn-primary {
+            background-color: #1B2A4A !important;
+            border-color: #1B2A4A !important;
+            color: #ffffff !important;
+        }
+
+        .btn-primary:hover {
+            background-color: #C9A84C !important;
+            border-color: #C9A84C !important;
+        }
+
         .navbar-vertical { scrollbar-width: none; }
         .navbar-vertical::-webkit-scrollbar { display: none; }
         .navbar-vertical .navbar-collapse { scrollbar-width: none; }
