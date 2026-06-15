@@ -11,6 +11,21 @@ class BuyerRequest extends FormRequest
         return true;
     }
 
+    /**
+     * Normalize comma-separated text inputs into arrays before validation.
+     */
+    protected function prepareForValidation(): void
+    {
+        foreach (['preferred_states', 'preferred_zip_codes'] as $field) {
+            $value = $this->input($field);
+
+            if (is_string($value)) {
+                $values = array_values(array_filter(array_map('trim', explode(',', $value)), fn ($v) => $v !== ''));
+                $this->merge([$field => $values]);
+            }
+        }
+    }
+
     public function rules(): array
     {
         return [

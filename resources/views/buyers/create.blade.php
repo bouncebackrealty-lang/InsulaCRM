@@ -73,12 +73,12 @@
             <div class="row mb-3">
                 <div class="col-md-6">
                     <label class="form-label">{{ __('Preferred States') }}</label>
-                    <textarea name="preferred_states" class="form-control @error('preferred_states') is-invalid @enderror" rows="3" placeholder="{{ __('Comma-separated state abbreviations (e.g., TX, FL, CA)') }}">{{ old('preferred_states') }}</textarea>
+                    <textarea name="preferred_states" class="form-control @error('preferred_states') is-invalid @enderror" rows="3" placeholder="{{ __('Comma-separated state abbreviations (e.g., TX, FL, CA)') }}">{{ is_array(old('preferred_states')) ? implode(', ', old('preferred_states')) : old('preferred_states') }}</textarea>
                     @error('preferred_states') <div class="invalid-feedback">{{ $message }}</div> @enderror
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">{{ __('Preferred Zip Codes') }}</label>
-                    <textarea name="preferred_zip_codes" class="form-control @error('preferred_zip_codes') is-invalid @enderror" rows="3" placeholder="{{ __('Comma-separated zip codes (e.g., 75001, 33101, 90210)') }}">{{ old('preferred_zip_codes') }}</textarea>
+                    <textarea name="preferred_zip_codes" class="form-control @error('preferred_zip_codes') is-invalid @enderror" rows="3" placeholder="{{ __('Comma-separated zip codes (e.g., 75001, 33101, 90210)') }}">{{ is_array(old('preferred_zip_codes')) ? implode(', ', old('preferred_zip_codes')) : old('preferred_zip_codes') }}</textarea>
                     @error('preferred_zip_codes') <div class="invalid-feedback">{{ $message }}</div> @enderror
                 </div>
             </div>
