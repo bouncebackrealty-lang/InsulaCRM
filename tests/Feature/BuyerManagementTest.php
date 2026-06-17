@@ -39,6 +39,22 @@ class BuyerManagementTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_create_buyer_with_comma_separated_preferred_states(): void
+    {
+        $this->actingAsAdmin();
+
+        $response = $this->post('/buyers', [
+            'first_name' => 'Georgia',
+            'last_name' => 'Buyer',
+            'email' => 'georgia@example.com',
+            'preferred_states' => 'GA, FL, TX',
+        ]);
+
+        $buyer = Buyer::where('first_name', 'Georgia')->first();
+        $response->assertRedirect("/buyers/{$buyer->id}");
+        $this->assertSame(['GA', 'FL', 'TX'], $buyer->preferred_states);
+    }
+
     public function test_admin_can_view_buyer_detail(): void
     {
         $this->actingAsAdmin();

@@ -429,6 +429,24 @@
                 @endforeach
             </div>
         </div>
+        @else
+        <div class="card mb-3">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-arrows-exchange me-1" width="20" height="20" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M7 10h14l-4 -4"/><path d="M17 14h-14l4 4"/></svg>
+                    {{ ($businessMode ?? 'wholesale') === 'realestate' ? __('Transaction') : __('Pipeline Deal') }}
+                </h3>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ route('leads.deals.store', $lead) }}">
+                    @csrf
+                    <button type="submit" class="btn btn-primary w-100">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon me-1" width="20" height="20" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                        {{ ($businessMode ?? 'wholesale') === 'realestate' ? __('Create Transaction') : __('Create Deal') }}
+                    </button>
+                </form>
+            </div>
+        </div>
         @endif
 
         <!-- Quick Actions -->

@@ -22,6 +22,7 @@ class LeadManagementTest extends TestCase
 
         $response = $this->get('/leads/create');
         $response->assertStatus(200);
+        $response->assertSee($this->adminUser->name);
     }
 
     public function test_admin_can_create_lead(): void
@@ -46,6 +47,27 @@ class LeadManagementTest extends TestCase
             'last_name' => 'Doe',
             'tenant_id' => $this->tenant->id,
         ]);
+    }
+
+    public function test_admin_can_create_lead_assigned_to_agent_team_member(): void
+    {
+        $this->actingAsAdmin();
+        $agent = $this->createUserWithRole('agent');
+
+        $response = $this->post('/leads', [
+            'first_name' => 'Team',
+            'last_name' => 'Lead',
+            'phone' => '555-0111',
+            'email' => 'team@example.com',
+            'lead_source' => 'website',
+            'status' => 'new',
+            'temperature' => 'warm',
+            'agent_id' => $agent->id,
+        ]);
+
+        $lead = Lead::where('first_name', 'Team')->where('last_name', 'Lead')->first();
+        $response->assertRedirect("/leads/{$lead->id}");
+        $this->assertEquals($agent->id, $lead->agent_id);
     }
 
     public function test_admin_can_view_lead_detail(): void

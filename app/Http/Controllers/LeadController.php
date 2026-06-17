@@ -5,12 +5,15 @@ namespace App\Http\Controllers;
 use App\Events\LeadStatusChanged;
 use App\Facades\Hooks;
 use App\Http\Requests\LeadRequest;
+use App\Models\Activity;
 use App\Models\AuditLog;
+use App\Models\Deal;
 use App\Models\Lead;
 use App\Models\LeadClaim;
 use App\Models\LeadPhoto;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\BusinessModeService;
 use Illuminate\Http\Request;
 use App\Services\CustomFieldService;
 use App\Services\AssignmentHistoryService;
@@ -254,6 +257,68 @@ class LeadController extends Controller
         return redirect()->route('leads.show', $lead)->with('success', __('Lead updated successfully.'));
     }
 
+    public function storeDeal(Lead $lead)
+    {
+        $this->authorize('update', $lead);
+
+        $lead->load(['property', 'deals']);
+
+        if ($existingDeal = $lead->deals->sortByDesc('updated_at')->first()) {
+            return redirect()
+                ->route('deals.show', $existingDeal)
+                ->with('info', __('This lead already has a pipeline deal.'));
+        }
+
+        $property = $lead->property;
+        $tenant = auth()->user()->tenant;
+        $isWholesale = BusinessModeService::isWholesale($tenant);
+        $isRealEstate = BusinessModeService::isRealEstate($tenant);
+
+        $data = [
+            'tenant_id' => auth()->user()->tenant_id,
+            'lead_id' => $lead->id,
+            'agent_id' => $lead->agent_id ?: auth()->id(),
+            'title' => $property?->full_address ?: $lead->full_name . ' Deal',
+            'stage' => BusinessModeService::getDefaultStage($tenant),
+            'notes' => $property?->notes,
+        ];
+
+        if ($property) {
+            if ($isWholesale) {
+                $data['contract_price'] = $property->our_offer ?: $property->asking_price ?: $property->estimated_value;
+
+                if ($property->our_offer && $property->mao !== null) {
+                    $data['assignment_fee'] = max((float) $property->mao - (float) $property->our_offer, 0);
+                }
+            }
+
+            if ($isRealEstate) {
+                $data['contract_price'] = $property->sold_price ?: $property->list_price ?: $property->asking_price;
+                $data['listing_date'] = $property->listed_at;
+            }
+        }
+
+        $deal = Deal::create($data);
+
+        Activity::create([
+            'tenant_id' => auth()->user()->tenant_id,
+            'lead_id' => $lead->id,
+            'deal_id' => $deal->id,
+            'agent_id' => auth()->id(),
+            'type' => 'note',
+            'subject' => __('Deal created'),
+            'body' => __('Pipeline deal created from lead.'),
+            'logged_at' => now(),
+        ]);
+
+        AuditLog::log('deal.created_from_lead', $deal);
+        Hooks::doAction('deal.created', $deal);
+
+        return redirect()
+            ->route('deals.show', $deal)
+            ->with('success', __('Deal created and added to the pipeline.'));
+    }
+
     public function destroy(Lead $lead)
     {
         $this->authorize('delete', $lead);
@@ -450,9 +515,11 @@ class LeadController extends Controller
         }
 
         $agentRoleNames = \App\Services\BusinessModeService::getAgentRoleNames();
-        $agentRoleIds = Role::whereIn('name', $agentRoleNames)->pluck('id');
+        $agentRoleIds = Role::whereIn('name', array_merge(['admin'], $agentRoleNames))->pluck('id');
         return User::where('tenant_id', auth()->user()->tenant_id)
             ->whereIn('role_id', $agentRoleIds)
+            ->where('is_active', true)
+            ->orderBy('name')
             ->get();
     }
 }

@@ -253,6 +253,7 @@ Route::middleware(['auth', 'tenant', 'require2fa'])->group(function () {
         Route::resource('leads', LeadController::class);
         Route::patch('/leads/{lead}/status', [LeadController::class, 'updateStatus'])->name('leads.updateStatus');
         Route::post('/leads/{lead}/claim', [LeadController::class, 'claim'])->name('leads.claim');
+        Route::post('/leads/{lead}/deals', [LeadController::class, 'storeDeal'])->name('leads.deals.store');
 
         // Activities on leads
         Route::post('/leads/{lead}/activities', [ActivityController::class, 'store'])->name('leads.activities.store');
@@ -594,7 +595,6 @@ Route::middleware(['auth', 'tenant', 'require2fa'])->group(function () {
     Route::get('/help', [KnowledgeBaseController::class, 'index'])->name('help.index');
     Route::get('/help/{slug}', [KnowledgeBaseController::class, 'show'])->name('help.show');
 });
-
 
 
 
