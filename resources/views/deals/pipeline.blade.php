@@ -684,8 +684,10 @@
                     const scoreClass = m.match_score >= 70 ? 'bg-green-lt' : (m.match_score >= 40 ? 'bg-yellow-lt' : 'bg-red-lt');
                     const sparkSvg = '<svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2zm0 -12a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2zm-7 12a6 6 0 0 1 6 -6a6 6 0 0 1 -6 -6a6 6 0 0 1 -6 6a6 6 0 0 1 6 6z"/></svg>';
                     const aiBtn = @json(auth()->user()->tenant->ai_enabled ?? false) ? `<button class="btn btn-outline-purple btn-sm ms-1" onclick="aiDraftBuyerMsg(${deal.id}, ${m.buyer ? m.buyer.id : 0})" title="{{ __('AI Draft Message') }}">${sparkSvg}</button><button class="btn btn-outline-info btn-sm ms-1" onclick="aiExplainMatch(${deal.id}, ${m.buyer ? m.buyer.id : 0})" title="{{ __('Explain Match') }}">${sparkSvg}</button>` : '';
+                    const buyerName = m.buyer ? (m.buyer.company || `${m.buyer.first_name || ''} ${m.buyer.last_name || ''}`.trim() || '-') : '-';
+                    const contactName = m.buyer ? `${m.buyer.first_name || ''} ${m.buyer.last_name || ''}`.trim() : '';
                     html += `<div class="list-group-item d-flex justify-content-between align-items-center">
-                        <div><strong>${m.buyer ? m.buyer.company_name : '-'}</strong><br><small class="text-secondary">${m.buyer ? m.buyer.contact_name : ''}</small></div>
+                        <div><strong>${buyerName}</strong><br><small class="text-secondary">${contactName}</small></div>
                         <div class="d-flex align-items-center">${aiBtn}<span class="badge ${scoreClass} ms-1">${m.match_score}%</span></div>
                     </div>`;
                 });

@@ -49,6 +49,43 @@ class LeadManagementTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_attach_property_to_lead_and_access_arv_comps_page(): void
+    {
+        $this->actingAsAdmin();
+        $lead = $this->createLead();
+
+        $response = $this->post("/leads/{$lead->id}/property", [
+            'address' => '123 Main St',
+            'city' => 'Atlanta',
+            'state' => 'GA',
+            'zip_code' => '30301',
+            'property_type' => 'single_family',
+            'condition' => 'fair',
+            'bedrooms' => 3,
+            'bathrooms' => 2,
+            'square_footage' => 1400,
+            'estimated_value' => 120000,
+            'after_repair_value' => 200000,
+            'repair_estimate' => 20000,
+            'asking_price' => 100000,
+            'our_offer' => 90000,
+        ]);
+
+        $property = $lead->fresh()->property;
+        $response->assertRedirect("/leads/{$lead->id}");
+        $this->assertDatabaseHas('properties', [
+            'lead_id' => $lead->id,
+            'tenant_id' => $this->tenant->id,
+            'state' => 'GA',
+            'maximum_allowable_offer' => 120000,
+        ]);
+
+        $leadPage = $this->get("/leads/{$lead->id}");
+        $leadPage->assertStatus(200);
+        $leadPage->assertSee('View ARV / Comps');
+        $leadPage->assertSee(route('properties.show', $property), false);
+    }
+
     public function test_admin_can_create_lead_assigned_to_agent_team_member(): void
     {
         $this->actingAsAdmin();

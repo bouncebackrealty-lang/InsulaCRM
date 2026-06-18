@@ -189,8 +189,10 @@
                         @foreach($deal->buyerMatches->sortByDesc('match_score') as $match)
                         <tr>
                             <td>
-                                <a href="{{ route('buyers.show', $match->buyer) }}">{{ $match->buyer->company_name }}</a>
-                                <div class="text-secondary small">{{ $match->buyer->contact_name }}</div>
+                                <a href="{{ route('buyers.show', $match->buyer) }}">
+                                    {{ $match->buyer->company ?: $match->buyer->full_name }}
+                                </a>
+                                <div class="text-secondary small">{{ $match->buyer->full_name }}</div>
                             </td>
                             <td>
                                 <span class="badge {{ $match->match_score >= 70 ? 'bg-green-lt' : ($match->match_score >= 40 ? 'bg-yellow-lt' : 'bg-red-lt') }}">

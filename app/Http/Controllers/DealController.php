@@ -92,6 +92,7 @@ class DealController extends Controller
         Activity::create([
             'tenant_id' => auth()->user()->tenant_id,
             'lead_id' => $deal->lead_id,
+            'deal_id' => $deal->id,
             'agent_id' => auth()->id(),
             'type' => 'stage_change',
             'subject' => 'Deal stage changed',
