@@ -7,7 +7,7 @@ use Tests\TestCase;
 
 class PropertyComparableTest extends TestCase
 {
-    public function test_admin_can_add_comps_and_get_70_and_75_percent_mao_summary(): void
+    public function test_admin_can_add_comps_and_get_70_72_and_75_percent_mao_summary(): void
     {
         $this->actingAsAdmin();
         $property = $this->createProperty([
@@ -42,11 +42,12 @@ class PropertyComparableTest extends TestCase
             'median_arv' => 210000,
             'comp_count' => 1,
             'mao_70' => 127000,
+            'mao_72' => 131200,
             'mao_75' => 137500,
         ]);
     }
 
-    public function test_property_page_renders_arv_worksheet_with_70_and_75_percent_presets(): void
+    public function test_property_page_renders_arv_worksheet_with_70_72_and_75_percent_presets(): void
     {
         $this->actingAsAdmin();
         $property = $this->createProperty([
@@ -67,6 +68,7 @@ class PropertyComparableTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee('ARV Worksheet');
         $response->assertSee('MAO (70% Rule)');
+        $response->assertSee('MAO (72% Rule)');
         $response->assertSee('MAO (75% Rule)');
         $response->assertSee('Comparable Sales');
     }

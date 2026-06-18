@@ -138,6 +138,7 @@ class ComparableSaleController extends Controller
                 'median_arv' => 0,
                 'comp_count' => 0,
                 'mao_70' => 0,
+                'mao_72' => 0,
                 'mao_75' => 0,
                 'spread' => 0,
             ]);
@@ -157,6 +158,7 @@ class ComparableSaleController extends Controller
 
         // MAO calculations
         $mao70 = ($avgArv * 0.70) - $repairEstimate;
+        $mao72 = ($avgArv * 0.72) - $repairEstimate;
         $mao75 = ($avgArv * 0.75) - $repairEstimate;
 
         // Spread (range)
@@ -167,6 +169,7 @@ class ComparableSaleController extends Controller
             'median_arv' => round($medianArv, 2),
             'comp_count' => $compCount,
             'mao_70' => round($mao70, 2),
+            'mao_72' => round($mao72, 2),
             'mao_75' => round($mao75, 2),
             'spread' => round($spread, 2),
             'repair_estimate' => $repairEstimate,

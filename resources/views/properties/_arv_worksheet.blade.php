@@ -17,6 +17,7 @@
     }
     $repairEstimate = (float) ($property->repair_estimate ?? 0);
     $mao70 = $compCount > 0 ? ($avgArv * 0.70) - $repairEstimate : 0;
+    $mao72 = $compCount > 0 ? ($avgArv * 0.72) - $repairEstimate : 0;
     $mao75 = $compCount > 0 ? ($avgArv * 0.75) - $repairEstimate : 0;
     $askingPrice = (float) ($property->asking_price ?? 0);
     $isGoodDeal = $askingPrice > 0 && $mao70 > 0 && $askingPrice < $mao70;
@@ -42,7 +43,7 @@
     <div class="card-body" id="arv-summary-section">
         @if($compCount > 0)
         <div class="row row-cards mb-3">
-            <div class="col-sm-6 col-lg-3">
+            <div class="col-sm-6 col-lg">
                 <div class="card card-sm">
                     <div class="card-body">
                         <div class="text-secondary small">{{ __('Estimated ARV') }}</div>
@@ -50,7 +51,7 @@
                     </div>
                 </div>
             </div>
-            <div class="col-sm-6 col-lg-3">
+            <div class="col-sm-6 col-lg">
                 <div class="card card-sm">
                     <div class="card-body">
                         <div class="text-secondary small">{{ __('Median ARV') }}</div>
@@ -58,7 +59,7 @@
                     </div>
                 </div>
             </div>
-            <div class="col-sm-6 col-lg-3">
+            <div class="col-sm-6 col-lg">
                 <div class="card card-sm">
                     <div class="card-body">
                         <div class="text-secondary small">{{ __('MAO (70% Rule)') }}</div>
@@ -66,7 +67,15 @@
                     </div>
                 </div>
             </div>
-            <div class="col-sm-6 col-lg-3">
+            <div class="col-sm-6 col-lg">
+                <div class="card card-sm">
+                    <div class="card-body">
+                        <div class="text-secondary small">{{ __('MAO (72% Rule)') }}</div>
+                        <div class="fw-bold fs-3">{{ Fmt::currency($mao72, 0) }}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-6 col-lg">
                 <div class="card card-sm">
                     <div class="card-body">
                         <div class="text-secondary small">{{ __('MAO (75% Rule)') }}</div>
