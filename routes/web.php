@@ -355,6 +355,8 @@ Route::middleware(['auth', 'tenant', 'require2fa'])->group(function () {
     // ── Contractors: admin, acquisition_agent, disposition_agent ──────
     Route::middleware('role:admin,acquisition_agent,disposition_agent')->group(function () {
         Route::get('/contractors/export', [ContractorController::class, 'export'])->name('contractors.export');
+        Route::get('/contractors/import-template', [ContractorController::class, 'importTemplate'])->name('contractors.importTemplate');
+        Route::post('/contractors/import', [ContractorController::class, 'import'])->name('contractors.import');
         Route::post('/contractors/bulk-action', [ContractorController::class, 'bulkAction'])->name('contractors.bulkAction');
         Route::resource('contractors', ContractorController::class);
     });

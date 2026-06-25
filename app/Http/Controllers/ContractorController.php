@@ -209,4 +209,149 @@ class ContractorController extends Controller
             'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
     }
+
+    /**
+     * Download a sample CSV template for bulk import.
+     */
+    public function importTemplate()
+    {
+        $this->authorize('import', Contractor::class);
+
+        return response()->streamDownload(function () {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, [
+                'name', 'phone', 'email', 'specialty', 'service_area',
+                'priority', 'referral_source', 'status', 'notes',
+            ]);
+            // Example rows showing the expected format.
+            fputcsv($handle, [
+                'Acme Roofing', '555-0100', 'acme@example.com', 'Roofing, HVAC', 'Atlanta Metro, GA',
+                'High', 'Referred by John', 'Bid Submitted', 'Reliable crew, fast turnaround',
+            ]);
+            fputcsv($handle, [
+                'Bright Electric', '555-0111', 'bright@example.com', 'Electrical', 'Fulton County, GA',
+                'Medium', 'Facebook group', 'Contacted', '',
+            ]);
+            fclose($handle);
+        }, 'contractor-import-template.csv', [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
+    }
+
+    /**
+     * Bulk-import contractors from a CSV file.
+     */
+    public function import(Request $request)
+    {
+        $this->authorize('import', Contractor::class);
+
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt|max:5120',
+        ]);
+
+        $handle = fopen($request->file('file')->getRealPath(), 'r');
+        if ($handle === false) {
+            return redirect()->route('contractors.index')->with('error', __('Unable to read the CSV file.'));
+        }
+
+        $header = fgetcsv($handle);
+        if ($header === false) {
+            fclose($handle);
+            return redirect()->route('contractors.index')->with('error', __('The CSV file is empty or invalid.'));
+        }
+
+        // Normalize headers: lowercase, trim, spaces -> underscores, strip BOM.
+        $header = array_map(function ($col) {
+            $col = preg_replace('/^\xEF\xBB\xBF/', '', (string) $col);
+            return str_replace(' ', '_', strtolower(trim($col)));
+        }, $header);
+
+        $columns = ['name', 'phone', 'email', 'specialty', 'service_area', 'priority', 'referral_source', 'status', 'notes'];
+        $map = [];
+        foreach ($columns as $col) {
+            $index = array_search($col, $header, true);
+            $map[$col] = $index === false ? null : $index;
+        }
+
+        if ($map['name'] === null) {
+            fclose($handle);
+            return redirect()->route('contractors.index')->with('error', __('CSV must contain a "name" column.'));
+        }
+
+        $tenantId = auth()->user()->tenant_id;
+        $imported = 0;
+        $skipped = 0;
+
+        while (($row = fgetcsv($handle)) !== false) {
+            // Skip fully empty rows.
+            if (count(array_filter($row, fn ($v) => trim((string) $v) !== '')) === 0) {
+                continue;
+            }
+
+            $name = trim((string) ($row[$map['name']] ?? ''));
+            if ($name === '') {
+                $skipped++;
+                continue;
+            }
+
+            $get = fn ($col) => $map[$col] !== null ? trim((string) ($row[$map[$col]] ?? '')) : null;
+
+            $specialty = [];
+            if ($map['specialty'] !== null) {
+                foreach (preg_split('/[,;|]/', (string) $row[$map['specialty']]) as $part) {
+                    $key = $this->resolveOption($part, Contractor::TRADE_CATEGORIES);
+                    if ($key !== null && !in_array($key, $specialty, true)) {
+                        $specialty[] = $key;
+                    }
+                }
+            }
+
+            Contractor::create([
+                'tenant_id' => $tenantId,
+                'name' => $name,
+                'phone' => $get('phone') ?: null,
+                'email' => $get('email') ?: null,
+                'specialty' => $specialty,
+                'service_area' => $get('service_area') ?: null,
+                'priority' => $this->resolveOption($get('priority'), Contractor::PRIORITIES) ?? 'medium',
+                'referral_source' => $get('referral_source') ?: null,
+                'status' => $this->resolveOption($get('status'), Contractor::STATUSES) ?? 'contacted',
+                'notes' => $get('notes') ?: null,
+            ]);
+
+            $imported++;
+        }
+
+        fclose($handle);
+
+        $message = __(':count contractor(s) imported successfully.', ['count' => $imported]);
+        if ($skipped > 0) {
+            $message .= ' ' . __(':count row(s) skipped (missing name).', ['count' => $skipped]);
+        }
+
+        return redirect()->route('contractors.index')->with('success', $message);
+    }
+
+    /**
+     * Resolve a free-text CSV value to a valid option key.
+     * Matches against the internal key or the display label (case-insensitive).
+     */
+    private function resolveOption(?string $value, array $options): ?string
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return null;
+        }
+
+        $needle = strtolower($value);
+        foreach ($options as $key => $label) {
+            if ($needle === strtolower($key) || $needle === strtolower($label)) {
+                return $key;
+            }
+        }
+
+        // Also match a slugified label, e.g. "general contractor" -> "general_contractor".
+        $slug = str_replace(' ', '_', $needle);
+        return array_key_exists($slug, $options) ? $slug : null;
+    }
 }

@@ -4,6 +4,33 @@
 @section('page-title', __('Contractors'))
 
 @section('content')
+<div class="card mb-3">
+    <div class="card-header">
+        <h3 class="card-title">{{ __('Import Contractors from CSV') }}</h3>
+        <div class="card-actions">
+            <a href="{{ route('contractors.importTemplate') }}" class="btn btn-outline-secondary btn-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z"/><path d="M12 17v-6"/><path d="M9.5 14.5l2.5 2.5l2.5 -2.5"/></svg>
+                {{ __('Download Template') }}
+            </a>
+        </div>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ route('contractors.import') }}" enctype="multipart/form-data" class="row g-3 align-items-end">
+            @csrf
+            <div class="col-auto flex-grow-1">
+                <label class="form-label">{{ __('CSV File') }} <small class="form-hint">{{ __('Download the template above to get started.') }}</small> </label>
+                <input type="file" name="file" class="form-control @error('file') is-invalid @enderror" accept=".csv,.txt" required>
+                @error('file') <div class="invalid-feedback">{{ $message }}</div> @enderror
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2"/><polyline points="7 9 12 4 17 9"/><line x1="12" y1="4" x2="12" y2="16"/></svg>
+                    {{ __('Import CSV') }}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 <div class="card">
     <div class="card-header">
         <h3 class="card-title">{{ __('Contractors') }}</h3>

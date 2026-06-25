@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Contractor;
 use App\Models\DealContractor;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 class ContractorManagementTest extends TestCase
@@ -187,6 +188,66 @@ class ContractorManagementTest extends TestCase
         $this->actingAsRole('field_scout');
 
         $this->get('/contractors')->assertStatus(403);
+    }
+
+    public function test_admin_can_download_import_template(): void
+    {
+        $this->actingAsAdmin();
+
+        $response = $this->get('/contractors/import-template');
+        $response->assertStatus(200);
+        $response->assertHeader('content-type', 'text/csv; charset=UTF-8');
+    }
+
+    public function test_admin_can_bulk_import_contractors_from_csv(): void
+    {
+        $this->actingAsAdmin();
+
+        // Header uses a space ("service area") and values use display labels.
+        $csv = "name,phone,email,specialty,service area,priority,referral_source,status,notes\n"
+             . "Acme Roofing,555-0100,acme@example.com,\"Roofing, HVAC\",Atlanta Metro,High,Referred by John,Bid Submitted,Reliable\n"
+             . "Bright Electric,555-0111,bright@example.com,Electrical,Fulton County,Medium,Facebook,Contacted,\n";
+
+        $file = UploadedFile::fake()->createWithContent('contractors.csv', $csv);
+
+        $response = $this->post('/contractors/import', ['file' => $file]);
+        $response->assertRedirect('/contractors');
+
+        $this->assertDatabaseCount('contractors', 2);
+
+        $acme = Contractor::where('name', 'Acme Roofing')->first();
+        $this->assertSame(['roofing', 'hvac'], $acme->specialty);
+        $this->assertEquals('high', $acme->priority);
+        $this->assertEquals('bid_submitted', $acme->status);
+        $this->assertEquals('acme@example.com', $acme->email);
+    }
+
+    public function test_import_skips_rows_without_name_and_defaults_invalid_values(): void
+    {
+        $this->actingAsAdmin();
+
+        $csv = "name,priority,status\n"
+             . ",High,Hired\n"
+             . "No Priority Co,,\n";
+
+        $file = UploadedFile::fake()->createWithContent('contractors.csv', $csv);
+
+        $this->post('/contractors/import', ['file' => $file])->assertRedirect('/contractors');
+
+        $this->assertDatabaseCount('contractors', 1);
+        $c = Contractor::first();
+        $this->assertEquals('No Priority Co', $c->name);
+        $this->assertEquals('medium', $c->priority);
+        $this->assertEquals('contacted', $c->status);
+    }
+
+    public function test_import_rejects_non_csv_file(): void
+    {
+        $this->actingAsAdmin();
+
+        $file = UploadedFile::fake()->create('contractors.pdf', 10, 'application/pdf');
+
+        $this->post('/contractors/import', ['file' => $file])->assertSessionHasErrors('file');
     }
 
     public function test_contractor_is_scoped_to_tenant(): void

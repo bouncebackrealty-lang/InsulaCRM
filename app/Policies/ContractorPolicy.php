@@ -41,4 +41,9 @@ class ContractorPolicy
     {
         return $user->canManageContractors();
     }
+
+    public function import(User $user): bool
+    {
+        return $user->canManageContractors();
+    }
 }
