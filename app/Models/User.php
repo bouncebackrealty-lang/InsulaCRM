@@ -137,4 +137,12 @@ class User extends Authenticatable
     {
         return $this->isAdmin() || $this->isDispositionAgent() || $this->isBuyersAgent();
     }
+
+    /**
+     * Check if user can access the contractor database.
+     */
+    public function canManageContractors(): bool
+    {
+        return $this->isAdmin() || $this->isAcquisitionAgent() || $this->isDispositionAgent();
+    }
 }

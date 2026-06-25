@@ -133,6 +133,11 @@ class Deal extends Model
         return $this->hasMany(DealBuyerMatch::class);
     }
 
+    public function contractors()
+    {
+        return $this->hasMany(DealContractor::class);
+    }
+
     public function activities()
     {
         return $this->hasMany(Activity::class);

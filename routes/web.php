@@ -5,6 +5,7 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\BuyerController;
+use App\Http\Controllers\ContractorController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DncController;
 use App\Http\Controllers\ReportController;
@@ -297,6 +298,11 @@ Route::middleware(['auth', 'tenant', 'require2fa'])->group(function () {
         Route::get('/pipeline/documents/{document}/download', [DealController::class, 'downloadDocument'])->name('deals.downloadDocument');
         Route::post('/pipeline/{deal}/notify-buyer/{match}', [DealController::class, 'notifyBuyer'])->name('deals.notifyBuyer');
 
+        // Contractors attached to deals
+        Route::post('/pipeline/{deal}/contractors', [DealController::class, 'attachContractor'])->name('deals.attachContractor');
+        Route::patch('/deal-contractors/{dealContractor}', [DealController::class, 'updateContractor'])->name('deals.updateContractor');
+        Route::delete('/deal-contractors/{dealContractor}', [DealController::class, 'detachContractor'])->name('deals.detachContractor');
+
         // Transaction Checklist
         Route::post('/pipeline/{deal}/checklist', [DealController::class, 'storeChecklist'])->name('deals.storeChecklist');
         Route::patch('/checklist/{item}', [DealController::class, 'updateChecklistItem'])->name('deals.updateChecklistItem');
@@ -344,6 +350,13 @@ Route::middleware(['auth', 'tenant', 'require2fa'])->group(function () {
         // Buyer Transactions
         Route::post('/buyers/{buyer}/transactions', [BuyerTransactionController::class, 'store'])->name('buyers.transactions.store');
         Route::delete('/buyer-transactions/{transaction}', [BuyerTransactionController::class, 'destroy'])->name('buyer-transactions.destroy');
+    });
+
+    // ── Contractors: admin, acquisition_agent, disposition_agent ──────
+    Route::middleware('role:admin,acquisition_agent,disposition_agent')->group(function () {
+        Route::get('/contractors/export', [ContractorController::class, 'export'])->name('contractors.export');
+        Route::post('/contractors/bulk-action', [ContractorController::class, 'bulkAction'])->name('contractors.bulkAction');
+        Route::resource('contractors', ContractorController::class);
     });
 
     // ── Goals: all except field_scout ────────────────────

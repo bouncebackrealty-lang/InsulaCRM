@@ -224,6 +224,117 @@
         </div>
         @endif
 
+        <!-- Contractors -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h3 class="card-title">{{ __('Contractors') }}</h3>
+                @if($deal->contractors->count())
+                <div class="card-actions">
+                    <span class="badge bg-blue-lt">{{ $deal->contractors->count() }}</span>
+                </div>
+                @endif
+            </div>
+            @if($deal->contractors->count())
+            <div class="table-responsive">
+                <table class="table table-vcenter card-table">
+                    <thead>
+                        <tr>
+                            <th>{{ __('Contractor') }}</th>
+                            <th>{{ __('Specialty') }}</th>
+                            <th style="min-width: 320px;">{{ __('Quoted / Accepted') }}</th>
+                            <th class="w-1"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($deal->contractors as $dc)
+                        <tr>
+                            <td>
+                                @if($dc->contractor)
+                                <a href="{{ route('contractors.show', $dc->contractor) }}" class="fw-bold">{{ $dc->contractor->name }}</a>
+                                @if($dc->contractor->phone)<div class="text-secondary small">{{ $dc->contractor->phone }}</div>@endif
+                                @else
+                                <span class="text-secondary">{{ __('Removed contractor') }}</span>
+                                @endif
+                            </td>
+                            <td>
+                                @forelse($dc->contractor->specialty ?? [] as $trade)
+                                    <span class="badge bg-blue-lt me-1">{{ __(\App\Models\Contractor::TRADE_CATEGORIES[$trade] ?? $trade) }}</span>
+                                @empty
+                                    <span class="text-secondary">-</span>
+                                @endforelse
+                            </td>
+                            <td>
+                                <form method="POST" action="{{ route('deals.updateContractor', $dc) }}" class="d-flex gap-2 align-items-center">
+                                    @csrf
+                                    @method('PATCH')
+                                    <div class="input-group input-group-sm" style="max-width: 140px;">
+                                        <span class="input-group-text">$</span>
+                                        <input type="number" name="quoted_amount" class="form-control" value="{{ $dc->quoted_amount }}" step="0.01" min="0" placeholder="{{ __('Quoted') }}" aria-label="{{ __('Quoted') }}">
+                                    </div>
+                                    <div class="input-group input-group-sm" style="max-width: 140px;">
+                                        <span class="input-group-text">$</span>
+                                        <input type="number" name="accepted_amount" class="form-control" value="{{ $dc->accepted_amount }}" step="0.01" min="0" placeholder="{{ __('Accepted') }}" aria-label="{{ __('Accepted') }}">
+                                    </div>
+                                    <button type="submit" class="btn btn-sm btn-outline-primary">{{ __('Save') }}</button>
+                                </form>
+                            </td>
+                            <td>
+                                <form method="POST" action="{{ route('deals.detachContractor', $dc) }}" onsubmit="return confirm('{{ __('Remove this contractor from the deal?') }}')">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">{{ __('Remove') }}</button>
+                                </form>
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+            @endif
+            <div class="card-body border-top">
+                @if($availableContractors->count())
+                <form method="POST" action="{{ route('deals.attachContractor', $deal) }}" class="row g-2 align-items-end">
+                    @csrf
+                    <div class="col-md-4">
+                        <label class="form-label">{{ __('Attach Contractor') }}</label>
+                        <select name="contractor_id" class="form-select @error('contractor_id') is-invalid @enderror" required>
+                            <option value="">{{ __('Select contractor...') }}</option>
+                            @foreach($availableContractors as $contractor)
+                            <option value="{{ $contractor->id }}" {{ old('contractor_id') == $contractor->id ? 'selected' : '' }}>{{ $contractor->name }}</option>
+                            @endforeach
+                        </select>
+                        @error('contractor_id') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">{{ __('Quoted') }}</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" name="quoted_amount" class="form-control" value="{{ old('quoted_amount') }}" step="0.01" min="0">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">{{ __('Accepted') }}</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" name="accepted_amount" class="form-control" value="{{ old('accepted_amount') }}" step="0.01" min="0">
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary w-100">{{ __('Attach') }}</button>
+                    </div>
+                </form>
+                @else
+                <p class="text-secondary mb-0">
+                    @if($deal->contractors->count())
+                        {{ __('All contractors are already attached to this deal.') }}
+                    @else
+                        {{ __('No contractors available.') }} <a href="{{ route('contractors.create') }}">{{ __('Add a contractor') }}</a> {{ __('first.') }}
+                    @endif
+                </p>
+                @endif
+            </div>
+        </div>
+
         <!-- Documents -->
         <div class="card mb-3">
             <div class="card-header">

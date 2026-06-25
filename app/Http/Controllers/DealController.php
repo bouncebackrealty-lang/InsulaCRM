@@ -7,7 +7,9 @@ use App\Facades\Hooks;
 use App\Http\Requests\DealRequest;
 use App\Models\Activity;
 use App\Models\AuditLog;
+use App\Models\Contractor;
 use App\Models\Deal;
+use App\Models\DealContractor;
 use App\Models\DealDocument;
 use App\Models\DealOffer;
 use App\Models\Role;
@@ -18,6 +20,7 @@ use App\Notifications\DealStageChanged as DealStageChangedNotification;
 use App\Services\BuyerScoreService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Storage;
 
 class DealController extends Controller
@@ -177,7 +180,7 @@ class DealController extends Controller
     public function show(Deal $deal)
     {
         $this->authorize('view', $deal);
-        $deal->load(['lead.property', 'agent', 'documents', 'buyerMatches.buyer', 'activities.agent']);
+        $deal->load(['lead.property', 'agent', 'documents', 'buyerMatches.buyer', 'activities.agent', 'contractors.contractor']);
 
         if (\App\Services\BusinessModeService::isRealEstate()) {
             $deal->load(['offers', 'checklistItems']);
@@ -187,7 +190,12 @@ class DealController extends Controller
             return response()->json($deal);
         }
 
-        return view('deals.show', compact('deal'));
+        $attachedContractorIds = $deal->contractors->pluck('contractor_id')->all();
+        $availableContractors = \App\Models\Contractor::whereNotIn('id', $attachedContractorIds)
+            ->orderBy('name')
+            ->get();
+
+        return view('deals.show', compact('deal', 'availableContractors'));
     }
 
     public function update(DealRequest $request, Deal $deal)
@@ -470,6 +478,60 @@ class DealController extends Controller
 
         $offer->delete();
         return response()->json(['success' => true]);
+    }
+
+    // ── Contractors ───────────────────────────────────────
+
+    public function attachContractor(Request $request, Deal $deal)
+    {
+        $this->authorize('update', $deal);
+
+        $validated = $request->validate([
+            'contractor_id' => [
+                'required',
+                Rule::exists('contractors', 'id')->where('tenant_id', auth()->user()->tenant_id),
+                Rule::unique('deal_contractors', 'contractor_id')->where('deal_id', $deal->id),
+            ],
+            'quoted_amount' => 'nullable|numeric|min:0',
+            'accepted_amount' => 'nullable|numeric|min:0',
+            'notes' => 'nullable|string',
+        ]);
+
+        DealContractor::create([
+            'deal_id' => $deal->id,
+            'contractor_id' => $validated['contractor_id'],
+            'quoted_amount' => $validated['quoted_amount'] ?? null,
+            'accepted_amount' => $validated['accepted_amount'] ?? null,
+            'notes' => $validated['notes'] ?? null,
+        ]);
+
+        return redirect()->back()->with('success', __('Contractor attached to deal.'));
+    }
+
+    public function updateContractor(Request $request, DealContractor $dealContractor)
+    {
+        $deal = Deal::findOrFail($dealContractor->deal_id);
+        $this->authorize('update', $deal);
+
+        $validated = $request->validate([
+            'quoted_amount' => 'nullable|numeric|min:0',
+            'accepted_amount' => 'nullable|numeric|min:0',
+            'notes' => 'nullable|string',
+        ]);
+
+        $dealContractor->update($validated);
+
+        return redirect()->back()->with('success', __('Contractor bid updated.'));
+    }
+
+    public function detachContractor(DealContractor $dealContractor)
+    {
+        $deal = Deal::findOrFail($dealContractor->deal_id);
+        $this->authorize('update', $deal);
+
+        $dealContractor->delete();
+
+        return redirect()->back()->with('success', __('Contractor removed from deal.'));
     }
 
 }

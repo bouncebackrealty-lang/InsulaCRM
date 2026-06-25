@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Helpers\TenantFormatHelper;
 use App\Models\Buyer;
+use App\Models\Contractor;
 use App\Models\Deal;
 use App\Models\Lead;
 use App\Models\Property;
@@ -11,6 +12,7 @@ use App\Models\OpenHouse;
 use App\Models\Showing;
 use App\Models\User;
 use App\Policies\BuyerPolicy;
+use App\Policies\ContractorPolicy;
 use App\Policies\DealPolicy;
 use App\Policies\LeadPolicy;
 use App\Policies\PropertyPolicy;
@@ -48,6 +50,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Lead::class, LeadPolicy::class);
         Gate::policy(Deal::class, DealPolicy::class);
         Gate::policy(Buyer::class, BuyerPolicy::class);
+        Gate::policy(Contractor::class, ContractorPolicy::class);
         Gate::policy(Property::class, PropertyPolicy::class);
         Gate::policy(User::class, UserPolicy::class);
         Gate::policy(Showing::class, ShowingPolicy::class);
