@@ -66,9 +66,17 @@ if (! function_exists('insulaCollectPreflightIssues')) {
                 continue;
             }
 
-            if (! is_writable($path)) {
+            // is_writable() is unreliable for directories on Windows (it only
+            // reflects the read-only attribute), so probe with a real write.
+            $probe = $path . '/.insula-write-test-' . getmypid();
+            $handle = @fopen($probe, 'w');
+            if ($handle === false) {
                 $issues[] = 'Not writable: ' . $path;
+                continue;
             }
+
+            fclose($handle);
+            @unlink($probe);
         }
 
         $logPath = $basePath . '/../storage/logs/laravel.log';
