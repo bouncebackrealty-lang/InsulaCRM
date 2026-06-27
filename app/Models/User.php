@@ -145,4 +145,12 @@ class User extends Authenticatable
     {
         return $this->isAdmin() || $this->isAcquisitionAgent() || $this->isDispositionAgent();
     }
+
+    /**
+     * Check if user can access the lender database.
+     */
+    public function canManageLenders(): bool
+    {
+        return $this->isAdmin() || $this->isAcquisitionAgent() || $this->isDispositionAgent();
+    }
 }

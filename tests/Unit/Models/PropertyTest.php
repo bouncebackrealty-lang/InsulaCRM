@@ -36,12 +36,13 @@ class PropertyTest extends TestCase
     {
         $this->actingAsAdmin();
         $property = $this->createProperty([
-            'after_repair_value' => 200000,
-            'repair_estimate' => 30000,
-            'our_offer' => 100000,
+            'after_repair_value' => 340000,
+            'repair_estimate' => 60500,
+            'our_offer' => 175000,
         ]);
 
-        $this->assertIsNumeric($property->assignment_fee);
+        // MAO = (340000 * 0.70) - 60500 = 177500; Assignment Fee = 177500 - 175000.
+        $this->assertEquals(2500, $property->assignment_fee);
     }
 
     public function test_distress_markers_cast_to_array(): void

@@ -138,6 +138,11 @@ class Deal extends Model
         return $this->hasMany(DealContractor::class);
     }
 
+    public function lenders()
+    {
+        return $this->hasMany(DealLender::class);
+    }
+
     public function activities()
     {
         return $this->hasMany(Activity::class);

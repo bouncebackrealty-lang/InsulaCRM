@@ -335,6 +335,125 @@
             </div>
         </div>
 
+        <!-- Lenders -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h3 class="card-title">{{ __('Lenders') }}</h3>
+                @if($deal->lenders->count())
+                <div class="card-actions">
+                    <span class="badge bg-blue-lt">{{ $deal->lenders->count() }}</span>
+                </div>
+                @endif
+            </div>
+            @if($deal->lenders->count())
+            <div class="table-responsive">
+                <table class="table table-vcenter card-table">
+                    <thead>
+                        <tr>
+                            <th>{{ __('Lender') }}</th>
+                            <th>{{ __('Loan Program') }}</th>
+                            <th>{{ __('Terms') }}</th>
+                            <th style="min-width: 300px;">{{ __('Funding Status') }}</th>
+                            <th class="w-1"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($deal->lenders as $dl)
+                        <tr>
+                            <td>
+                                @if($dl->lender)
+                                <a href="{{ route('lenders.show', $dl->lender) }}" class="fw-bold">{{ $dl->lender->name }}</a>
+                                @if($dl->lender->company)<div class="text-secondary small">{{ $dl->lender->company }}</div>@endif
+                                @if($dl->lender->phone)<div class="text-secondary small">{{ $dl->lender->phone }}</div>@endif
+                                @else
+                                <span class="text-secondary">{{ __('Removed lender') }}</span>
+                                @endif
+                            </td>
+                            <td>{{ $dl->loanProgram->program_name ?? '-' }}</td>
+                            <td class="text-secondary small">
+                                @if($dl->loanProgram)
+                                    @if($dl->loanProgram->interest_rate !== null){{ __('Rate:') }} {{ $dl->loanProgram->interest_rate }}%<br>@endif
+                                    @if($dl->loanProgram->points !== null){{ __('Points:') }} {{ $dl->loanProgram->points }}<br>@endif
+                                    @if($dl->loanProgram->max_ltc !== null){{ __('LTC:') }} {{ $dl->loanProgram->max_ltc }}%<br>@endif
+                                    @if($dl->loanProgram->max_ltv !== null){{ __('LTV:') }} {{ $dl->loanProgram->max_ltv }}%<br>@endif
+                                    @if($dl->loanProgram->term_length){{ __('Term:') }} {{ $dl->loanProgram->term_length }}<br>@endif
+                                    @if($dl->loanProgram->purchase_closing_cost_percent !== null){{ __('Purchase Closing Cost:') }} {{ $dl->loanProgram->purchase_closing_cost_percent }}%<br>@endif
+                                    {{ __('Builder Risk:') }} {{ $dl->loanProgram->builders_risk_insurance ? __('Yes') : __('No') }}
+                                    @if($dl->loanProgram->notes)<br>{{ __('Program Notes:') }} {{ $dl->loanProgram->notes }}@endif
+                                @else
+                                    -
+                                @endif
+                            </td>
+                            <td>
+                                <form method="POST" action="{{ route('deals.updateLender', $dl) }}" class="d-flex gap-2 align-items-center">
+                                    @csrf
+                                    @method('PATCH')
+                                    <select name="status" class="form-select form-select-sm" style="max-width: 190px;">
+                                        @foreach(\App\Models\DealLender::STATUSES as $val => $label)
+                                        <option value="{{ $val }}" {{ $dl->status === $val ? 'selected' : '' }}>{{ __($label) }}</option>
+                                        @endforeach
+                                    </select>
+                                    <input type="text" name="notes" class="form-control form-control-sm" value="{{ $dl->notes }}" placeholder="{{ __('Notes') }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-primary">{{ __('Save') }}</button>
+                                </form>
+                            </td>
+                            <td>
+                                <form method="POST" action="{{ route('deals.detachLender', $dl) }}" onsubmit="return confirm('{{ __('Remove this lender from the deal?') }}')">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">{{ __('Remove') }}</button>
+                                </form>
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+            @endif
+            <div class="card-body border-top">
+                @if($availableLoanPrograms->count())
+                <form method="POST" action="{{ route('deals.attachLender', $deal) }}" class="row g-2 align-items-end">
+                    @csrf
+                    <div class="col-md-5">
+                        <label class="form-label">{{ __('Attach Lender Program') }}</label>
+                        <select name="lender_loan_program_id" class="form-select @error('lender_loan_program_id') is-invalid @enderror" required>
+                            <option value="">{{ __('Select lender program...') }}</option>
+                            @foreach($availableLoanPrograms as $program)
+                            <option value="{{ $program->id }}" {{ old('lender_loan_program_id') == $program->id ? 'selected' : '' }}>
+                                {{ $program->lender->name ?? __('Lender') }} - {{ $program->program_name }}
+                            </option>
+                            @endforeach
+                        </select>
+                        @error('lender_loan_program_id') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">{{ __('Status') }}</label>
+                        <select name="status" class="form-select">
+                            @foreach(\App\Models\DealLender::STATUSES as $val => $label)
+                            <option value="{{ $val }}" {{ old('status', 'inquired') === $val ? 'selected' : '' }}>{{ __($label) }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">{{ __('Notes') }}</label>
+                        <input type="text" name="notes" class="form-control" value="{{ old('notes') }}">
+                    </div>
+                    <div class="col-md-1">
+                        <button type="submit" class="btn btn-primary w-100">{{ __('Attach') }}</button>
+                    </div>
+                </form>
+                @else
+                <p class="text-secondary mb-0">
+                    @if($deal->lenders->count())
+                        {{ __('All lender programs are already attached to this deal.') }}
+                    @else
+                        {{ __('No lender programs available.') }} <a href="{{ route('lenders.create') }}">{{ __('Add a lender') }}</a> {{ __('first.') }}
+                    @endif
+                </p>
+                @endif
+            </div>
+        </div>
+
         <!-- Documents -->
         <div class="card mb-3">
             <div class="card-header">

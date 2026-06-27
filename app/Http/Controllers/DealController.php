@@ -11,7 +11,9 @@ use App\Models\Contractor;
 use App\Models\Deal;
 use App\Models\DealContractor;
 use App\Models\DealDocument;
+use App\Models\DealLender;
 use App\Models\DealOffer;
+use App\Models\LenderLoanProgram;
 use App\Models\Role;
 use App\Models\TransactionChecklist;
 use App\Models\User;
@@ -180,7 +182,16 @@ class DealController extends Controller
     public function show(Deal $deal)
     {
         $this->authorize('view', $deal);
-        $deal->load(['lead.property', 'agent', 'documents', 'buyerMatches.buyer', 'activities.agent', 'contractors.contractor']);
+        $deal->load([
+            'lead.property',
+            'agent',
+            'documents',
+            'buyerMatches.buyer',
+            'activities.agent',
+            'contractors.contractor',
+            'lenders.lender',
+            'lenders.loanProgram',
+        ]);
 
         if (\App\Services\BusinessModeService::isRealEstate()) {
             $deal->load(['offers', 'checklistItems']);
@@ -194,8 +205,14 @@ class DealController extends Controller
         $availableContractors = \App\Models\Contractor::whereNotIn('id', $attachedContractorIds)
             ->orderBy('name')
             ->get();
+        $attachedProgramIds = $deal->lenders->pluck('lender_loan_program_id')->all();
+        $availableLoanPrograms = LenderLoanProgram::with('lender')
+            ->whereNotIn('id', $attachedProgramIds)
+            ->orderBy('program_name')
+            ->get()
+            ->sortBy(fn ($program) => ($program->lender->name ?? '') . ' ' . $program->program_name);
 
-        return view('deals.show', compact('deal', 'availableContractors'));
+        return view('deals.show', compact('deal', 'availableContractors', 'availableLoanPrograms'));
     }
 
     public function update(DealRequest $request, Deal $deal)
@@ -532,6 +549,60 @@ class DealController extends Controller
         $dealContractor->delete();
 
         return redirect()->back()->with('success', __('Contractor removed from deal.'));
+    }
+
+    // ── Lenders ───────────────────────────────────────
+
+    public function attachLender(Request $request, Deal $deal)
+    {
+        $this->authorize('update', $deal);
+
+        $validated = $request->validate([
+            'lender_loan_program_id' => [
+                'required',
+                Rule::exists('lender_loan_programs', 'id')->where('tenant_id', auth()->user()->tenant_id),
+                Rule::unique('deal_lenders', 'lender_loan_program_id')->where('deal_id', $deal->id),
+            ],
+            'status' => ['required', Rule::in(array_keys(DealLender::STATUSES))],
+            'notes' => 'nullable|string',
+        ]);
+
+        $program = LenderLoanProgram::with('lender')->findOrFail($validated['lender_loan_program_id']);
+
+        DealLender::create([
+            'deal_id' => $deal->id,
+            'lender_id' => $program->lender_id,
+            'lender_loan_program_id' => $program->id,
+            'status' => $validated['status'],
+            'notes' => $validated['notes'] ?? null,
+        ]);
+
+        return redirect()->back()->with('success', __('Lender attached to deal.'));
+    }
+
+    public function updateLender(Request $request, DealLender $dealLender)
+    {
+        $deal = Deal::findOrFail($dealLender->deal_id);
+        $this->authorize('update', $deal);
+
+        $validated = $request->validate([
+            'status' => ['required', Rule::in(array_keys(DealLender::STATUSES))],
+            'notes' => 'nullable|string',
+        ]);
+
+        $dealLender->update($validated);
+
+        return redirect()->back()->with('success', __('Lender funding updated.'));
+    }
+
+    public function detachLender(DealLender $dealLender)
+    {
+        $deal = Deal::findOrFail($dealLender->deal_id);
+        $this->authorize('update', $deal);
+
+        $dealLender->delete();
+
+        return redirect()->back()->with('success', __('Lender removed from deal.'));
     }
 
 }

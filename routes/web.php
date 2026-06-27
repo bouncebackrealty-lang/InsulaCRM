@@ -12,6 +12,7 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\DealController;
 use App\Http\Controllers\LeadController;
+use App\Http\Controllers\LenderController;
 use App\Http\Controllers\ListController;
 use App\Http\Controllers\PluginController;
 use App\Http\Controllers\PropertyController;
@@ -303,6 +304,11 @@ Route::middleware(['auth', 'tenant', 'require2fa'])->group(function () {
         Route::patch('/deal-contractors/{dealContractor}', [DealController::class, 'updateContractor'])->name('deals.updateContractor');
         Route::delete('/deal-contractors/{dealContractor}', [DealController::class, 'detachContractor'])->name('deals.detachContractor');
 
+        // Lenders attached to deals
+        Route::post('/pipeline/{deal}/lenders', [DealController::class, 'attachLender'])->name('deals.attachLender');
+        Route::patch('/deal-lenders/{dealLender}', [DealController::class, 'updateLender'])->name('deals.updateLender');
+        Route::delete('/deal-lenders/{dealLender}', [DealController::class, 'detachLender'])->name('deals.detachLender');
+
         // Transaction Checklist
         Route::post('/pipeline/{deal}/checklist', [DealController::class, 'storeChecklist'])->name('deals.storeChecklist');
         Route::patch('/checklist/{item}', [DealController::class, 'updateChecklistItem'])->name('deals.updateChecklistItem');
@@ -359,6 +365,14 @@ Route::middleware(['auth', 'tenant', 'require2fa'])->group(function () {
         Route::post('/contractors/import', [ContractorController::class, 'import'])->name('contractors.import');
         Route::post('/contractors/bulk-action', [ContractorController::class, 'bulkAction'])->name('contractors.bulkAction');
         Route::resource('contractors', ContractorController::class);
+    });
+
+    // ── Lenders: admin, acquisition_agent, disposition_agent ──────
+    Route::middleware('role:admin,acquisition_agent,disposition_agent')->group(function () {
+        Route::post('/lenders/{lender}/programs', [LenderController::class, 'storeProgram'])->name('lenders.programs.store');
+        Route::put('/lender-programs/{program}', [LenderController::class, 'updateProgram'])->name('lenders.programs.update');
+        Route::delete('/lender-programs/{program}', [LenderController::class, 'destroyProgram'])->name('lenders.programs.destroy');
+        Route::resource('lenders', LenderController::class);
     });
 
     // ── Goals: all except field_scout ────────────────────
@@ -610,7 +624,6 @@ Route::middleware(['auth', 'tenant', 'require2fa'])->group(function () {
     Route::get('/help', [KnowledgeBaseController::class, 'index'])->name('help.index');
     Route::get('/help/{slug}', [KnowledgeBaseController::class, 'show'])->name('help.show');
 });
-
 
 
 

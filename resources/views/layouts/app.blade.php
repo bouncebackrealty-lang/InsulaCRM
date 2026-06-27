@@ -229,6 +229,17 @@
                         </li>
                         @endif
 
+                        @if(auth()->user()->canManageLenders())
+                        <li class="nav-item {{ request()->is('lenders*') || request()->is('lender-programs*') ? 'active' : '' }}">
+                            <a class="nav-link" href="{{ route('lenders.index') }}">
+                                <span class="nav-link-icon">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 21h18"/><path d="M3 10h18"/><path d="M5 6l7 -3l7 3"/><path d="M4 10v11"/><path d="M20 10v11"/><path d="M8 14v3"/><path d="M12 14v3"/><path d="M16 14v3"/></svg>
+                                </span>
+                                <span class="nav-link-title">{{ __('Lenders') }}</span>
+                            </a>
+                        </li>
+                        @endif
+
                         @unless(auth()->user()->isFieldScout())
                         <li class="nav-item {{ request()->is('calendar*') ? 'active' : '' }}">
                             <a class="nav-link" href="{{ route('calendar.index') }}">

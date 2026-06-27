@@ -110,7 +110,7 @@ class Property extends Model
     public function getAssignmentFeeAttribute(): ?float
     {
         if ($this->our_offer && $this->after_repair_value && $this->repair_estimate) {
-            return $this->our_offer - ($this->after_repair_value * 0.70) - $this->repair_estimate;
+            return round($this->mao - (float) $this->our_offer, 2);
         }
         return null;
     }
@@ -118,7 +118,7 @@ class Property extends Model
     public function getMaoAttribute(): ?float
     {
         if ($this->after_repair_value && $this->repair_estimate) {
-            return ($this->after_repair_value * 0.70) - $this->repair_estimate;
+            return round(($this->after_repair_value * 0.70) - $this->repair_estimate, 2);
         }
         return null;
     }
