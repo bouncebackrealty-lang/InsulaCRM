@@ -454,6 +454,186 @@
             </div>
         </div>
 
+        <!-- Rehab Tracker -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h3 class="card-title">{{ __('Rehab Tracker') }}</h3>
+                @if($deal->rehabLineItems->count())
+                <div class="card-actions">
+                    <span class="badge bg-blue-lt">{{ $deal->rehabLineItems->count() }}</span>
+                </div>
+                @endif
+            </div>
+            @php
+                $rehabBudgetTotal = $deal->rehabLineItems->sum(fn ($item) => (float) $item->budgeted_cost);
+                $rehabPaidTotal = $deal->rehabLineItems->sum(fn ($item) => (float) $item->amount_paid);
+                $rehabRemainingTotal = $rehabBudgetTotal - $rehabPaidTotal;
+            @endphp
+            @if($deal->rehabLineItems->count())
+            <div class="card-body border-bottom">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <div class="text-secondary small">{{ __('Total Budgeted') }}</div>
+                        <div class="h3 mb-0">{{ Fmt::currency($rehabBudgetTotal) }}</div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-secondary small">{{ __('Total Paid') }}</div>
+                        <div class="h3 mb-0">{{ Fmt::currency($rehabPaidTotal) }}</div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-secondary small">{{ __('Remaining Balance') }}</div>
+                        <div class="h3 mb-0">{{ Fmt::currency($rehabRemainingTotal) }}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-vcenter card-table">
+                    <thead>
+                        <tr>
+                            <th>{{ __('Line Item') }}</th>
+                            <th>{{ __('Category') }}</th>
+                            <th>{{ __('Budgeted Cost') }}</th>
+                            <th>{{ __('Duration') }}</th>
+                            <th>{{ __('Contractor') }}</th>
+                            <th>{{ __('Status') }}</th>
+                            <th>{{ __('Amount Paid') }}</th>
+                            <th>{{ __('Remaining') }}</th>
+                            <th class="w-1"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($deal->rehabLineItems as $item)
+                        <tr>
+                            <td>
+                                <input form="rehab-update-{{ $item->id }}" type="text" name="line_item" class="form-control form-control-sm" value="{{ $item->line_item }}" required>
+                            </td>
+                            <td style="min-width: 190px;">
+                                <select form="rehab-update-{{ $item->id }}" name="category" class="form-select form-select-sm" required>
+                                    @foreach(\App\Models\RehabLineItem::CATEGORIES as $value => $label)
+                                    <option value="{{ $value }}" {{ $item->category === $value ? 'selected' : '' }}>{{ __($label) }}</option>
+                                    @endforeach
+                                </select>
+                            </td>
+                            <td style="min-width: 140px;">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text">$</span>
+                                    <input form="rehab-update-{{ $item->id }}" type="number" name="budgeted_cost" class="form-control" value="{{ $item->budgeted_cost }}" step="0.01" min="0" required>
+                                </div>
+                            </td>
+                            <td style="min-width: 110px;">
+                                <input form="rehab-update-{{ $item->id }}" type="number" name="estimated_duration_days" class="form-control form-control-sm" value="{{ $item->estimated_duration_days }}" min="0" placeholder="{{ __('Days') }}">
+                            </td>
+                            <td style="min-width: 180px;">
+                                <select form="rehab-update-{{ $item->id }}" name="contractor_id" class="form-select form-select-sm">
+                                    <option value="">{{ __('Unassigned') }}</option>
+                                    @foreach($rehabContractors as $contractor)
+                                    <option value="{{ $contractor->id }}" {{ (int) $item->contractor_id === $contractor->id ? 'selected' : '' }}>{{ $contractor->name }}</option>
+                                    @endforeach
+                                </select>
+                            </td>
+                            <td style="min-width: 150px;">
+                                <select form="rehab-update-{{ $item->id }}" name="status" class="form-select form-select-sm" required>
+                                    @foreach(\App\Models\RehabLineItem::STATUSES as $value => $label)
+                                    <option value="{{ $value }}" {{ $item->status === $value ? 'selected' : '' }}>{{ __($label) }}</option>
+                                    @endforeach
+                                </select>
+                            </td>
+                            <td style="min-width: 140px;">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text">$</span>
+                                    <input form="rehab-update-{{ $item->id }}" type="number" name="amount_paid" class="form-control" value="{{ $item->amount_paid }}" step="0.01" min="0">
+                                </div>
+                            </td>
+                            <td>{{ Fmt::currency($item->remaining_balance) }}</td>
+                            <td>
+                                <div class="d-flex gap-2">
+                                    <form id="rehab-update-{{ $item->id }}" method="POST" action="{{ route('deals.rehabItems.update', $item) }}">
+                                        @csrf
+                                        @method('PATCH')
+                                        <button type="submit" class="btn btn-sm btn-outline-primary">{{ __('Save') }}</button>
+                                    </form>
+                                    <form method="POST" action="{{ route('deals.rehabItems.destroy', $item) }}" onsubmit="return confirm('{{ __('Remove this rehab line item?') }}')">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">{{ __('Delete') }}</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+            @else
+            <div class="card-body border-bottom">
+                <p class="text-secondary mb-0">{{ __('No rehab line items have been added yet.') }}</p>
+            </div>
+            @endif
+            <div class="card-body">
+                <form method="POST" action="{{ route('deals.rehabItems.store', $deal) }}" class="row g-2 align-items-end">
+                    @csrf
+                    <div class="col-md-3">
+                        <label class="form-label">{{ __('Line Item') }}</label>
+                        <input type="text" name="line_item" class="form-control @error('line_item') is-invalid @enderror" value="{{ old('line_item') }}" required>
+                        @error('line_item') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">{{ __('Category') }}</label>
+                        <select name="category" class="form-select @error('category') is-invalid @enderror" required>
+                            <option value="">{{ __('Select category...') }}</option>
+                            @foreach(\App\Models\RehabLineItem::CATEGORIES as $value => $label)
+                            <option value="{{ $value }}" {{ old('category') === $value ? 'selected' : '' }}>{{ __($label) }}</option>
+                            @endforeach
+                        </select>
+                        @error('category') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">{{ __('Budgeted Cost') }}</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" name="budgeted_cost" class="form-control @error('budgeted_cost') is-invalid @enderror" value="{{ old('budgeted_cost') }}" step="0.01" min="0" required>
+                            @error('budgeted_cost') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">{{ __('Duration Days') }}</label>
+                        <input type="number" name="estimated_duration_days" class="form-control @error('estimated_duration_days') is-invalid @enderror" value="{{ old('estimated_duration_days') }}" min="0">
+                        @error('estimated_duration_days') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">{{ __('Amount Paid') }}</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" name="amount_paid" class="form-control @error('amount_paid') is-invalid @enderror" value="{{ old('amount_paid', 0) }}" step="0.01" min="0">
+                            @error('amount_paid') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">{{ __('Contractor Assigned') }}</label>
+                        <select name="contractor_id" class="form-select @error('contractor_id') is-invalid @enderror">
+                            <option value="">{{ __('Unassigned') }}</option>
+                            @foreach($rehabContractors as $contractor)
+                            <option value="{{ $contractor->id }}" {{ old('contractor_id') == $contractor->id ? 'selected' : '' }}>{{ $contractor->name }}</option>
+                            @endforeach
+                        </select>
+                        @error('contractor_id') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">{{ __('Status') }}</label>
+                        <select name="status" class="form-select @error('status') is-invalid @enderror" required>
+                            @foreach(\App\Models\RehabLineItem::STATUSES as $value => $label)
+                            <option value="{{ $value }}" {{ old('status', 'not_started') === $value ? 'selected' : '' }}>{{ __($label) }}</option>
+                            @endforeach
+                        </select>
+                        @error('status') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary w-100">{{ __('Add Item') }}</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- Documents -->
         <div class="card mb-3">
             <div class="card-header">

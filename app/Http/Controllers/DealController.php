@@ -14,6 +14,7 @@ use App\Models\DealDocument;
 use App\Models\DealLender;
 use App\Models\DealOffer;
 use App\Models\LenderLoanProgram;
+use App\Models\RehabLineItem;
 use App\Models\Role;
 use App\Models\TransactionChecklist;
 use App\Models\User;
@@ -191,6 +192,7 @@ class DealController extends Controller
             'contractors.contractor',
             'lenders.lender',
             'lenders.loanProgram',
+            'rehabLineItems.contractor',
         ]);
 
         if (\App\Services\BusinessModeService::isRealEstate()) {
@@ -211,8 +213,9 @@ class DealController extends Controller
             ->orderBy('program_name')
             ->get()
             ->sortBy(fn ($program) => ($program->lender->name ?? '') . ' ' . $program->program_name);
+        $rehabContractors = Contractor::orderBy('name')->get();
 
-        return view('deals.show', compact('deal', 'availableContractors', 'availableLoanPrograms'));
+        return view('deals.show', compact('deal', 'availableContractors', 'availableLoanPrograms', 'rehabContractors'));
     }
 
     public function update(DealRequest $request, Deal $deal)
@@ -603,6 +606,63 @@ class DealController extends Controller
         $dealLender->delete();
 
         return redirect()->back()->with('success', __('Lender removed from deal.'));
+    }
+
+    // ── Rehab Tracker ──────────────────────────────────────
+
+    public function storeRehabLineItem(Request $request, Deal $deal)
+    {
+        $this->authorize('update', $deal);
+
+        RehabLineItem::create([
+            'tenant_id' => auth()->user()->tenant_id,
+            'deal_id' => $deal->id,
+            ...$this->validateRehabLineItem($request),
+        ]);
+
+        return redirect()->back()->with('success', __('Rehab line item added.'));
+    }
+
+    public function updateRehabLineItem(Request $request, RehabLineItem $rehabLineItem)
+    {
+        $deal = Deal::findOrFail($rehabLineItem->deal_id);
+        $this->authorize('update', $deal);
+
+        $rehabLineItem->update($this->validateRehabLineItem($request));
+
+        return redirect()->back()->with('success', __('Rehab line item updated.'));
+    }
+
+    public function destroyRehabLineItem(RehabLineItem $rehabLineItem)
+    {
+        $deal = Deal::findOrFail($rehabLineItem->deal_id);
+        $this->authorize('update', $deal);
+
+        $rehabLineItem->delete();
+
+        return redirect()->back()->with('success', __('Rehab line item removed.'));
+    }
+
+    private function validateRehabLineItem(Request $request): array
+    {
+        $validated = $request->validate([
+            'line_item' => 'required|string|max:255',
+            'category' => ['required', Rule::in(array_keys(RehabLineItem::CATEGORIES))],
+            'budgeted_cost' => 'required|numeric|min:0',
+            'estimated_duration_days' => 'nullable|integer|min:0',
+            'contractor_id' => [
+                'nullable',
+                Rule::exists('contractors', 'id')->where('tenant_id', auth()->user()->tenant_id),
+            ],
+            'status' => ['required', Rule::in(array_keys(RehabLineItem::STATUSES))],
+            'amount_paid' => 'nullable|numeric|min:0',
+        ]);
+
+        $validated['contractor_id'] = $validated['contractor_id'] ?? null;
+        $validated['estimated_duration_days'] = $validated['estimated_duration_days'] ?? null;
+        $validated['amount_paid'] = $validated['amount_paid'] ?? 0;
+
+        return $validated;
     }
 
 }

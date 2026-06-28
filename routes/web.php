@@ -309,6 +309,11 @@ Route::middleware(['auth', 'tenant', 'require2fa'])->group(function () {
         Route::patch('/deal-lenders/{dealLender}', [DealController::class, 'updateLender'])->name('deals.updateLender');
         Route::delete('/deal-lenders/{dealLender}', [DealController::class, 'detachLender'])->name('deals.detachLender');
 
+        // Rehab Tracker line items
+        Route::post('/pipeline/{deal}/rehab-items', [DealController::class, 'storeRehabLineItem'])->name('deals.rehabItems.store');
+        Route::patch('/rehab-items/{rehabLineItem}', [DealController::class, 'updateRehabLineItem'])->name('deals.rehabItems.update');
+        Route::delete('/rehab-items/{rehabLineItem}', [DealController::class, 'destroyRehabLineItem'])->name('deals.rehabItems.destroy');
+
         // Transaction Checklist
         Route::post('/pipeline/{deal}/checklist', [DealController::class, 'storeChecklist'])->name('deals.storeChecklist');
         Route::patch('/checklist/{item}', [DealController::class, 'updateChecklistItem'])->name('deals.updateChecklistItem');
@@ -624,6 +629,5 @@ Route::middleware(['auth', 'tenant', 'require2fa'])->group(function () {
     Route::get('/help', [KnowledgeBaseController::class, 'index'])->name('help.index');
     Route::get('/help/{slug}', [KnowledgeBaseController::class, 'show'])->name('help.show');
 });
-
 
 

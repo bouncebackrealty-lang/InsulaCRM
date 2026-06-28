@@ -143,6 +143,11 @@ class Deal extends Model
         return $this->hasMany(DealLender::class);
     }
 
+    public function rehabLineItems()
+    {
+        return $this->hasMany(RehabLineItem::class)->latest();
+    }
+
     public function activities()
     {
         return $this->hasMany(Activity::class);
