@@ -49,6 +49,7 @@ class PropertyRequest extends FormRequest
             $rules += [
                 'repair_estimate' => 'nullable|numeric|min:0',
                 'after_repair_value' => 'nullable|numeric|min:0|gte:repair_estimate',
+                'mao_percentage' => 'nullable|integer|in:70,72,75',
                 'our_offer' => 'nullable|numeric|min:0',
                 'distress_markers' => 'nullable|array',
                 'distress_markers.*' => "in:{$distressMarkers}",

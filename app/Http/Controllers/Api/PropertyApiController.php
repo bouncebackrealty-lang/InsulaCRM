@@ -81,6 +81,7 @@ class PropertyApiController extends Controller
             'estimated_value'    => 'nullable|numeric|min:0',
             'repair_estimate'    => 'nullable|numeric|min:0',
             'after_repair_value' => 'nullable|numeric|min:0',
+            'mao_percentage'     => 'nullable|integer|in:70,72,75',
             'asking_price'       => 'nullable|numeric|min:0',
             'our_offer'          => 'nullable|numeric|min:0',
             'condition'          => 'nullable|string|max:100',
@@ -108,9 +109,15 @@ class PropertyApiController extends Controller
                 ->findOrFail($data['lead_id']);
         }
 
+        $data['mao_percentage'] = (int) ($data['mao_percentage'] ?? 70);
+
         // Compute MAO if applicable (wholesale mode only)
         if (!\App\Services\BusinessModeService::isRealEstate($tenant) && !empty($data['after_repair_value']) && !empty($data['repair_estimate'])) {
-            $data['maximum_allowable_offer'] = ($data['after_repair_value'] * 0.70) - $data['repair_estimate'];
+            $data['maximum_allowable_offer'] = Property::calculateMao(
+                (float) $data['after_repair_value'],
+                (float) $data['repair_estimate'],
+                $data['mao_percentage']
+            );
         }
 
         $property = Property::withoutGlobalScopes()->create($data);
@@ -142,6 +149,7 @@ class PropertyApiController extends Controller
             'estimated_value'    => 'nullable|numeric|min:0',
             'repair_estimate'    => 'nullable|numeric|min:0',
             'after_repair_value' => 'nullable|numeric|min:0',
+            'mao_percentage'     => 'nullable|integer|in:70,72,75',
             'asking_price'       => 'nullable|numeric|min:0',
             'our_offer'          => 'nullable|numeric|min:0',
             'condition'          => 'nullable|string|max:100',
@@ -161,8 +169,16 @@ class PropertyApiController extends Controller
         $data = $validator->validated();
         $data = AddressNormalizationService::normalizeAll($data);
 
-        if (!\App\Services\BusinessModeService::isRealEstate($tenant) && !empty($data['after_repair_value']) && !empty($data['repair_estimate'])) {
-            $data['maximum_allowable_offer'] = ($data['after_repair_value'] * 0.70) - $data['repair_estimate'];
+        $maoPercentage = (int) ($data['mao_percentage'] ?? $property->mao_percentage ?? 70);
+        $afterRepairValue = (float) ($data['after_repair_value'] ?? $property->after_repair_value ?? 0);
+        $repairEstimate = (float) ($data['repair_estimate'] ?? $property->repair_estimate ?? 0);
+
+        if (!\App\Services\BusinessModeService::isRealEstate($tenant) && $afterRepairValue > 0 && $repairEstimate > 0) {
+            $data['maximum_allowable_offer'] = Property::calculateMao(
+                $afterRepairValue,
+                $repairEstimate,
+                $maoPercentage
+            );
         }
 
         $property->update($data);

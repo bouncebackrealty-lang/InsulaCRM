@@ -43,6 +43,7 @@ class PropertyFactory extends Factory
             'estimated_value' => $estimatedValue,
             'repair_estimate' => $repairEstimate,
             'after_repair_value' => $arv,
+            'mao_percentage' => 70,
             'asking_price' => $askingPrice,
             'our_offer' => $ourOffer,
             'notes' => fake()->optional(0.5)->sentence(8),

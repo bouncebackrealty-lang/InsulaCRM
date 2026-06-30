@@ -124,8 +124,21 @@ class CustomFieldServiceTest extends TestCase
         $this->assertArrayHasKey('property_type', $types);
         $this->assertArrayHasKey('property_condition', $types);
         $this->assertArrayHasKey('distress_markers', $types);
+        $this->assertArrayHasKey('rehab_category', $types);
         $this->assertArrayHasKey('activity_type', $types);
         $this->assertArrayHasKey('lead_source', $types);
+    }
+
+    public function test_rehab_categories_include_custom_options(): void
+    {
+        $this->actingAsAdmin();
+
+        $result = CustomFieldService::addOption('rehab_category', 'Landscaping', $this->tenant);
+
+        $this->assertTrue($result['success']);
+        $options = CustomFieldService::getOptions('rehab_category', $this->tenant->fresh());
+        $this->assertArrayHasKey('landscaping', $options);
+        $this->assertArrayHasKey('kitchen', $options);
     }
 
     public function test_outreach_activity_types_defined(): void

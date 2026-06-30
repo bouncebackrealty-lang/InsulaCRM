@@ -25,7 +25,7 @@
                 </div>
                 @if(($businessMode ?? 'wholesale') === 'wholesale')
                 <div class="col-md-2">
-                    <small class="text-secondary d-block">{{ __('MAO') }}</small>
+                    <small class="text-secondary d-block">{{ __('MAO') }} ({{ $lead->property->mao_percentage ?? 70 }}%)</small>
                     <strong class="{{ ($lead->property->mao ?? 0) >= 0 ? 'text-green' : 'text-red' }}">
                         {{ Fmt::currency($lead->property->mao ?? 0, 0) }}
                     </strong>
@@ -173,10 +173,19 @@
                     <input type="number" name="repair_estimate" id="repair_estimate" class="form-control calc-field" step="0.01" min="0" value="{{ old('repair_estimate', $lead->property->repair_estimate ?? '') }}">
                 </div>
                 <div class="col-md-3">
+                    <label class="form-label">{{ __('MAO Percentage') }}</label>
+                    @php $selectedMaoPercentage = (int) old('mao_percentage', $lead->property->mao_percentage ?? 70); @endphp
+                    <select name="mao_percentage" id="mao_percentage" class="form-select calc-field">
+                        @foreach([70, 72, 75] as $percentage)
+                            <option value="{{ $percentage }}" {{ $selectedMaoPercentage === $percentage ? 'selected' : '' }}>{{ $percentage }}%</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-md-3">
                     <label class="form-label">{{ __('MAO') }}</label>
                     <div class="form-control-plaintext">
                         <strong id="mao-display" class="h4">$0.00</strong>
-                        <br><small class="text-secondary">{{ __('(ARV x 70%) - Repairs') }}</small>
+                        <br><small class="text-secondary" id="mao-formula">{{ __('(ARV x 70%) - Repairs') }}</small>
                     </div>
                 </div>
             </div>
@@ -234,10 +243,12 @@
 function calculateMAO() {
     const arv = parseFloat(document.getElementById('after_repair_value').value) || 0;
     const repair = parseFloat(document.getElementById('repair_estimate').value) || 0;
+    const percentage = parseFloat(document.getElementById('mao_percentage').value) || 70;
     const maoEl = document.getElementById('mao-display');
+    document.getElementById('mao-formula').textContent = '(ARV x ' + percentage + '%) - Repairs';
 
     if (arv && repair) {
-        const mao = (arv * 0.70) - repair;
+        const mao = (arv * (percentage / 100)) - repair;
         maoEl.textContent = '{{ Fmt::currencySymbol() }}' + mao.toLocaleString('{{ Fmt::jsLocale() }}', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         maoEl.className = mao >= 0 ? 'h4 text-green' : 'h4 text-red';
     } else {
@@ -250,9 +261,10 @@ function calculateAssignmentFee() {
     const ourOffer = parseFloat(document.getElementById('our_offer').value) || 0;
     const arv = parseFloat(document.getElementById('after_repair_value').value) || 0;
     const repair = parseFloat(document.getElementById('repair_estimate').value) || 0;
+    const percentage = parseFloat(document.getElementById('mao_percentage').value) || 70;
 
     if (ourOffer && arv && repair) {
-        const mao = (arv * 0.70) - repair;
+        const mao = (arv * (percentage / 100)) - repair;
         const fee = mao - ourOffer;
         const feeEl = document.getElementById('assignment-fee');
         feeEl.textContent = '{{ Fmt::currencySymbol() }}' + fee.toLocaleString('{{ Fmt::jsLocale() }}', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

@@ -81,6 +81,10 @@
                     <strong>{{ Fmt::currency($property->after_repair_value) }}</strong>
                 </div>
                 <div class="mb-2">
+                    <span class="text-secondary">{{ __('MAO Percentage:') }}</span>
+                    <strong>{{ $property->mao_percentage ?? 70 }}%</strong>
+                </div>
+                <div class="mb-2">
                     <span class="text-secondary">{{ __('Asking Price:') }}</span>
                     <strong>{{ Fmt::currency($property->asking_price) }}</strong>
                 </div>

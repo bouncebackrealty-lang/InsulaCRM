@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Contractor;
 use App\Models\RehabLineItem;
+use App\Services\CustomFieldService;
 use Tests\TestCase;
 
 class RehabTrackerTest extends TestCase
@@ -81,6 +82,46 @@ class RehabTrackerTest extends TestCase
         $response->assertSee('$12,000.00');
         $response->assertSee('$4,000.00');
         $response->assertSee('$8,000.00');
+    }
+
+    public function test_rehab_tracker_renders_requested_field_order(): void
+    {
+        $this->actingAsAdmin();
+        $deal = $this->createDeal();
+
+        $response = $this->get("/pipeline/{$deal->id}");
+
+        $response->assertStatus(200);
+        $response->assertSeeInOrder([
+            'Category',
+            'Line Item',
+            'Budget',
+            'Duration',
+            'Contractor Assigned',
+            'Status',
+            'Amount',
+        ]);
+    }
+
+    public function test_admin_can_use_custom_rehab_category(): void
+    {
+        $this->actingAsAdmin();
+        $deal = $this->createDeal();
+        CustomFieldService::addOption('rehab_category', 'Landscaping', $this->tenant);
+
+        $this->post("/pipeline/{$deal->id}/rehab-items", [
+            'line_item' => 'Sod and cleanup',
+            'category' => 'landscaping',
+            'budgeted_cost' => 1800,
+            'status' => 'not_started',
+            'amount_paid' => 0,
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('rehab_line_items', [
+            'deal_id' => $deal->id,
+            'category' => 'landscaping',
+            'line_item' => 'Sod and cleanup',
+        ]);
     }
 
     public function test_admin_can_update_rehab_line_item_and_remaining_balance_recalculates(): void

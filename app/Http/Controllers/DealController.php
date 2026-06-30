@@ -21,6 +21,7 @@ use App\Models\User;
 use App\Notifications\BuyerMatchFound;
 use App\Notifications\DealStageChanged as DealStageChangedNotification;
 use App\Services\BuyerScoreService;
+use App\Services\CustomFieldService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\Rule;
@@ -645,9 +646,11 @@ class DealController extends Controller
 
     private function validateRehabLineItem(Request $request): array
     {
+        $tenant = auth()->user()->tenant()->first();
+
         $validated = $request->validate([
             'line_item' => 'required|string|max:255',
-            'category' => ['required', Rule::in(array_keys(RehabLineItem::CATEGORIES))],
+            'category' => ['required', Rule::in(CustomFieldService::getValidSlugs('rehab_category', $tenant))],
             'budgeted_cost' => 'required|numeric|min:0',
             'estimated_duration_days' => 'nullable|integer|min:0',
             'contractor_id' => [

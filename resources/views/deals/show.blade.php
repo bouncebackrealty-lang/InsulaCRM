@@ -468,6 +468,7 @@
                 $rehabBudgetTotal = $deal->rehabLineItems->sum(fn ($item) => (float) $item->budgeted_cost);
                 $rehabPaidTotal = $deal->rehabLineItems->sum(fn ($item) => (float) $item->amount_paid);
                 $rehabRemainingTotal = $rehabBudgetTotal - $rehabPaidTotal;
+                $rehabCategories = \App\Services\CustomFieldService::getOptions('rehab_category');
             @endphp
             @if($deal->rehabLineItems->count())
             <div class="card-body border-bottom">
@@ -490,13 +491,13 @@
                 <table class="table table-vcenter card-table">
                     <thead>
                         <tr>
-                            <th>{{ __('Line Item') }}</th>
                             <th>{{ __('Category') }}</th>
-                            <th>{{ __('Budgeted Cost') }}</th>
+                            <th>{{ __('Line Item') }}</th>
+                            <th>{{ __('Budget') }}</th>
                             <th>{{ __('Duration') }}</th>
-                            <th>{{ __('Contractor') }}</th>
+                            <th>{{ __('Contractor Assigned') }}</th>
                             <th>{{ __('Status') }}</th>
-                            <th>{{ __('Amount Paid') }}</th>
+                            <th>{{ __('Amount') }}</th>
                             <th>{{ __('Remaining') }}</th>
                             <th class="w-1"></th>
                         </tr>
@@ -504,15 +505,15 @@
                     <tbody>
                         @foreach($deal->rehabLineItems as $item)
                         <tr>
-                            <td>
-                                <input form="rehab-update-{{ $item->id }}" type="text" name="line_item" class="form-control form-control-sm" value="{{ $item->line_item }}" required>
-                            </td>
                             <td style="min-width: 190px;">
                                 <select form="rehab-update-{{ $item->id }}" name="category" class="form-select form-select-sm" required>
-                                    @foreach(\App\Models\RehabLineItem::CATEGORIES as $value => $label)
+                                    @foreach($rehabCategories as $value => $label)
                                     <option value="{{ $value }}" {{ $item->category === $value ? 'selected' : '' }}>{{ __($label) }}</option>
                                     @endforeach
                                 </select>
+                            </td>
+                            <td>
+                                <input form="rehab-update-{{ $item->id }}" type="text" name="line_item" class="form-control form-control-sm" value="{{ $item->line_item }}" required>
                             </td>
                             <td style="min-width: 140px;">
                                 <div class="input-group input-group-sm">
@@ -573,22 +574,22 @@
                 <form method="POST" action="{{ route('deals.rehabItems.store', $deal) }}" class="row g-2 align-items-end">
                     @csrf
                     <div class="col-md-3">
-                        <label class="form-label">{{ __('Line Item') }}</label>
-                        <input type="text" name="line_item" class="form-control @error('line_item') is-invalid @enderror" value="{{ old('line_item') }}" required>
-                        @error('line_item') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                    </div>
-                    <div class="col-md-3">
                         <label class="form-label">{{ __('Category') }}</label>
                         <select name="category" class="form-select @error('category') is-invalid @enderror" required>
                             <option value="">{{ __('Select category...') }}</option>
-                            @foreach(\App\Models\RehabLineItem::CATEGORIES as $value => $label)
+                            @foreach($rehabCategories as $value => $label)
                             <option value="{{ $value }}" {{ old('category') === $value ? 'selected' : '' }}>{{ __($label) }}</option>
                             @endforeach
                         </select>
                         @error('category') <div class="invalid-feedback">{{ $message }}</div> @enderror
                     </div>
+                    <div class="col-md-3">
+                        <label class="form-label">{{ __('Line Item') }}</label>
+                        <input type="text" name="line_item" class="form-control @error('line_item') is-invalid @enderror" value="{{ old('line_item') }}" required>
+                        @error('line_item') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    </div>
                     <div class="col-md-2">
-                        <label class="form-label">{{ __('Budgeted Cost') }}</label>
+                        <label class="form-label">{{ __('Budget') }}</label>
                         <div class="input-group">
                             <span class="input-group-text">$</span>
                             <input type="number" name="budgeted_cost" class="form-control @error('budgeted_cost') is-invalid @enderror" value="{{ old('budgeted_cost') }}" step="0.01" min="0" required>
@@ -599,14 +600,6 @@
                         <label class="form-label">{{ __('Duration Days') }}</label>
                         <input type="number" name="estimated_duration_days" class="form-control @error('estimated_duration_days') is-invalid @enderror" value="{{ old('estimated_duration_days') }}" min="0">
                         @error('estimated_duration_days') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label">{{ __('Amount Paid') }}</label>
-                        <div class="input-group">
-                            <span class="input-group-text">$</span>
-                            <input type="number" name="amount_paid" class="form-control @error('amount_paid') is-invalid @enderror" value="{{ old('amount_paid', 0) }}" step="0.01" min="0">
-                            @error('amount_paid') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                        </div>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">{{ __('Contractor Assigned') }}</label>
@@ -626,6 +619,14 @@
                             @endforeach
                         </select>
                         @error('status') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">{{ __('Amount') }}</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" name="amount_paid" class="form-control @error('amount_paid') is-invalid @enderror" value="{{ old('amount_paid', 0) }}" step="0.01" min="0">
+                            @error('amount_paid') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                        </div>
                     </div>
                     <div class="col-md-2">
                         <button type="submit" class="btn btn-primary w-100">{{ __('Add Item') }}</button>

@@ -30,6 +30,7 @@ class Property extends Model
         'asking_price',
         'our_offer',
         'maximum_allowable_offer',
+        'mao_percentage',
         'condition',
         'distress_markers',
         'list_price',
@@ -49,6 +50,7 @@ class Property extends Model
             'asking_price' => 'decimal:2',
             'our_offer' => 'decimal:2',
             'maximum_allowable_offer' => 'decimal:2',
+            'mao_percentage' => 'integer',
             'distress_markers' => 'array',
             'list_price' => 'decimal:2',
             'sold_price' => 'decimal:2',
@@ -118,8 +120,17 @@ class Property extends Model
     public function getMaoAttribute(): ?float
     {
         if ($this->after_repair_value && $this->repair_estimate) {
-            return round(($this->after_repair_value * 0.70) - $this->repair_estimate, 2);
+            return self::calculateMao(
+                (float) $this->after_repair_value,
+                (float) $this->repair_estimate,
+                (int) ($this->mao_percentage ?: 70)
+            );
         }
         return null;
+    }
+
+    public static function calculateMao(float $afterRepairValue, float $repairEstimate, int $maoPercentage = 70): float
+    {
+        return round(($afterRepairValue * ($maoPercentage / 100)) - $repairEstimate, 2);
     }
 }

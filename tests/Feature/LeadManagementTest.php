@@ -86,6 +86,33 @@ class LeadManagementTest extends TestCase
         $leadPage->assertSee(route('properties.show', $property), false);
     }
 
+    public function test_admin_can_select_mao_percentage_when_saving_property(): void
+    {
+        $this->actingAsAdmin();
+        $lead = $this->createLead();
+
+        $response = $this->post("/leads/{$lead->id}/property", [
+            'address' => '2524 Gordon Circle SE',
+            'city' => 'Atlanta',
+            'state' => 'GA',
+            'zip_code' => '30317',
+            'property_type' => 'single_family',
+            'condition' => 'fair',
+            'after_repair_value' => 340000,
+            'repair_estimate' => 60500,
+            'mao_percentage' => 72,
+            'our_offer' => 175000,
+        ]);
+
+        $response->assertRedirect("/leads/{$lead->id}");
+        $this->assertDatabaseHas('properties', [
+            'lead_id' => $lead->id,
+            'mao_percentage' => 72,
+            'maximum_allowable_offer' => 184300,
+        ]);
+        $this->assertEquals(9300, $lead->fresh()->property->assignment_fee);
+    }
+
     public function test_admin_can_create_lead_assigned_to_agent_team_member(): void
     {
         $this->actingAsAdmin();
