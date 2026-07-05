@@ -295,6 +295,7 @@ Route::middleware(['auth', 'tenant', 'require2fa'])->group(function () {
         Route::put('/pipeline/{deal}', [DealController::class, 'update'])->name('deals.update');
         Route::patch('/pipeline/{deal}', [DealController::class, 'update'])->name('deals.quickUpdate');
         Route::patch('/pipeline/{deal}/stage', [DealController::class, 'updateStage'])->name('deals.updateStage');
+        Route::patch('/pipeline/{deal}/priority', [DealController::class, 'togglePriority'])->name('deals.togglePriority');
         Route::post('/pipeline/{deal}/documents', [DealController::class, 'uploadDocument'])->name('deals.uploadDocument');
         Route::get('/pipeline/documents/{document}/download', [DealController::class, 'downloadDocument'])->name('deals.downloadDocument');
         Route::post('/pipeline/{deal}/notify-buyer/{match}', [DealController::class, 'notifyBuyer'])->name('deals.notifyBuyer');
@@ -629,5 +630,4 @@ Route::middleware(['auth', 'tenant', 'require2fa'])->group(function () {
     Route::get('/help', [KnowledgeBaseController::class, 'index'])->name('help.index');
     Route::get('/help/{slug}', [KnowledgeBaseController::class, 'show'])->name('help.show');
 });
-
 

@@ -7,6 +7,10 @@ use App\Models\Buyer;
 use App\Models\Deal;
 use App\Models\DealBuyerMatch;
 use App\Models\DealDocument;
+use App\Models\DealLender;
+use App\Models\LeadPhoto;
+use App\Models\Lender;
+use App\Models\LenderLoanProgram;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -96,6 +100,267 @@ class DealManagementTest extends TestCase
         $pipeline = $this->get('/pipeline');
         $pipeline->assertStatus(200);
         $pipeline->assertSee($property->fresh()->address);
+    }
+
+    public function test_pipeline_visibility_page_includes_full_quoted_controls(): void
+    {
+        $this->actingAsAdmin();
+        $this->createDeal(['is_priority' => false]);
+
+        $response = $this->get('/pipeline');
+
+        $response->assertStatus(200);
+        $response->assertSee('data-testid="pipeline-summary-bar"', false);
+        $response->assertSee('data-testid="pipeline-stage-filter"', false);
+        $response->assertSee('data-testid="pipeline-deal-type-filter"', false);
+        $response->assertSee('data-testid="pipeline-lender-filter"', false);
+        $response->assertSee('data-testid="pipeline-search"', false);
+        $response->assertSee('data-testid="pipeline-view-toggle"', false);
+        $response->assertSee('data-testid="pipeline-priority-star"', false);
+        $response->assertSee('data-testid="pipeline-add-deal"', false);
+        $response->assertSee('data-testid="pipeline-move-stage"', false);
+        $response->assertSee('Card View');
+        $response->assertSee('List View');
+        $response->assertSee('Add Deal');
+        // Wholesale tenants have no inspection stage; summary bucket uses Dispositions.
+        $response->assertSee('In Disposition');
+        $response->assertDontSee('Under Inspection');
+    }
+
+    public function test_pipeline_card_renders_expected_public_deal_fields_without_internal_fee(): void
+    {
+        $this->actingAsAdmin();
+        $lead = $this->createLead(['first_name' => 'Latanya', 'last_name' => 'White']);
+        $property = $this->createProperty([
+            'lead_id' => $lead->id,
+            'address' => '1234 Oakwood Dr SW',
+            'city' => 'Atlanta',
+            'state' => 'GA',
+            'zip_code' => '30310',
+            'asking_price' => 245000,
+            'after_repair_value' => 425000,
+            'repair_estimate' => 65500,
+            'our_offer' => 218000,
+            'mao_percentage' => 70,
+        ]);
+        $deal = $this->createDeal([
+            'lead_id' => $lead->id,
+            'stage' => 'under_contract',
+            'deal_type' => 'fix_and_flip',
+            'contract_price' => 218000,
+            'assignment_fee' => 14500,
+            'is_priority' => true,
+            'stage_changed_at' => now()->subDays(2),
+        ]);
+        $lender = Lender::create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'Alliance Capital Contact',
+            'company' => 'Alliance Capital',
+        ]);
+        $program = LenderLoanProgram::create([
+            'tenant_id' => $this->tenant->id,
+            'lender_id' => $lender->id,
+            'program_name' => 'Fix and Flip',
+        ]);
+        DealLender::create([
+            'deal_id' => $deal->id,
+            'lender_id' => $lender->id,
+            'lender_loan_program_id' => $program->id,
+        ]);
+        LeadPhoto::create([
+            'tenant_id' => $this->tenant->id,
+            'lead_id' => $lead->id,
+            'uploaded_by' => $this->adminUser->id,
+            'filename' => 'front.jpg',
+            'original_name' => 'front.jpg',
+            'path' => 'leads/photos/front.jpg',
+            'thumbnail_path' => 'leads/photos/thumb-front.jpg',
+            'mime_type' => 'image/jpeg',
+            'size' => 1000,
+            'caption' => 'Front exterior',
+        ]);
+
+        $response = $this->get('/pipeline');
+
+        $response->assertStatus(200);
+        $response->assertSee('data-testid="pipeline-deal-card"', false);
+        $response->assertSee('thumb-front.jpg');
+        $response->assertSee($property->address);
+        $response->assertSee('Atlanta');
+        $response->assertSee('Under Contract');
+        $response->assertSee('Asking Price');
+        $response->assertSee('$245,000');
+        $response->assertSee('Contract Price');
+        $response->assertSee('$218,000');
+        $response->assertSee('ARV');
+        $response->assertSee('$425,000');
+        $response->assertSee('Max Offer / MAO');
+        $response->assertSee('$232,000');
+        $response->assertSee('Alliance Capital');
+        $response->assertSee('Fix &amp; Flip', false);
+        $response->assertSee('2 Days in Stage');
+        $response->assertDontSee('Assignment Fee');
+        $response->assertDontSee('Estimated Profit');
+        $response->assertDontSee('Internal Spread');
+    }
+
+    public function test_pipeline_search_finds_deals_by_address_seller_and_title(): void
+    {
+        $this->actingAsAdmin();
+        $lead = $this->createLead(['first_name' => 'UniqueSeller', 'last_name' => 'Pipeline']);
+        $property = $this->createProperty([
+            'lead_id' => $lead->id,
+            'address' => '777 Searchable Avenue',
+        ]);
+        $this->createDeal([
+            'lead_id' => $lead->id,
+            'title' => 'Unique Pipeline Deal',
+            'is_priority' => false,
+        ]);
+        $otherLead = $this->createLead(['first_name' => 'Other', 'last_name' => 'Seller']);
+        $this->createProperty([
+            'lead_id' => $otherLead->id,
+            'address' => '999 Hidden Road',
+        ]);
+        $this->createDeal([
+            'lead_id' => $otherLead->id,
+            'title' => 'Hidden Pipeline Deal',
+            'is_priority' => false,
+        ]);
+
+        $this->get('/pipeline?search=Searchable')
+            ->assertStatus(200)
+            ->assertSee($property->address)
+            ->assertDontSee('999 Hidden Road');
+
+        $this->get('/pipeline?search=UniqueSeller')
+            ->assertStatus(200)
+            ->assertSee($property->address)
+            ->assertDontSee('999 Hidden Road');
+
+        $this->get('/pipeline?search=' . urlencode('UniqueSeller Pipeline'))
+            ->assertStatus(200)
+            ->assertSee($property->address)
+            ->assertDontSee('999 Hidden Road');
+
+        $this->get('/pipeline?search=Unique+Pipeline')
+            ->assertStatus(200)
+            ->assertSee($property->address)
+            ->assertDontSee('999 Hidden Road');
+    }
+
+    public function test_pipeline_filters_by_stage_deal_type_and_lender(): void
+    {
+        $this->actingAsAdmin();
+        $matchingLead = $this->createLead();
+        $matchingProperty = $this->createProperty([
+            'lead_id' => $matchingLead->id,
+            'address' => '456 Filter Match Ln',
+        ]);
+        $matchingDeal = $this->createDeal([
+            'lead_id' => $matchingLead->id,
+            'stage' => 'under_contract',
+            'deal_type' => 'rental',
+            'is_priority' => false,
+        ]);
+        $otherLead = $this->createLead();
+        $this->createProperty([
+            'lead_id' => $otherLead->id,
+            'address' => '789 Filter Miss Rd',
+        ]);
+        $this->createDeal([
+            'lead_id' => $otherLead->id,
+            'stage' => 'prospecting',
+            'deal_type' => 'wholesale',
+            'is_priority' => false,
+        ]);
+        $lender = Lender::create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'Filter Lender',
+        ]);
+        $program = LenderLoanProgram::create([
+            'tenant_id' => $this->tenant->id,
+            'lender_id' => $lender->id,
+            'program_name' => 'Rental DSCR',
+        ]);
+        DealLender::create([
+            'deal_id' => $matchingDeal->id,
+            'lender_id' => $lender->id,
+            'lender_loan_program_id' => $program->id,
+        ]);
+
+        $this->get('/pipeline?stage=under_contract')
+            ->assertStatus(200)
+            ->assertSee($matchingProperty->address)
+            ->assertDontSee('789 Filter Miss Rd');
+
+        $this->get('/pipeline?deal_type=rental')
+            ->assertStatus(200)
+            ->assertSee($matchingProperty->address)
+            ->assertDontSee('789 Filter Miss Rd');
+
+        $this->get('/pipeline?lender=' . $lender->id)
+            ->assertStatus(200)
+            ->assertSee($matchingProperty->address)
+            ->assertDontSee('789 Filter Miss Rd');
+    }
+
+    public function test_pipeline_list_view_renders_same_deal_set(): void
+    {
+        $this->actingAsAdmin();
+        $lead = $this->createLead();
+        $property = $this->createProperty([
+            'lead_id' => $lead->id,
+            'address' => '321 List View Way',
+        ]);
+        $this->createDeal([
+            'lead_id' => $lead->id,
+            'deal_type' => 'other',
+            'is_priority' => false,
+        ]);
+
+        $response = $this->get('/pipeline?view=list');
+
+        $response->assertStatus(200);
+        $response->assertSee('data-testid="pipeline-list-results"', false);
+        $response->assertSee('data-testid="pipeline-list-row"', false);
+        $response->assertSee($property->address);
+        $response->assertSee('Max Offer / MAO');
+        $response->assertSee('Days in Stage');
+    }
+
+    public function test_deal_type_can_be_set_from_deal_edit_form(): void
+    {
+        $this->actingAsAdmin();
+        $deal = $this->createDeal(['deal_type' => null]);
+
+        $show = $this->get("/pipeline/{$deal->id}");
+        $show->assertStatus(200);
+        $show->assertSee('name="deal_type"', false);
+
+        $response = $this->putJson("/pipeline/{$deal->id}", [
+            'deal_type' => 'wholesale',
+        ]);
+
+        $response->assertOk();
+        $this->assertEquals('wholesale', $deal->fresh()->deal_type);
+    }
+
+    public function test_pipeline_priority_star_toggle_persists(): void
+    {
+        $this->actingAsAdmin();
+        $deal = $this->createDeal([
+            'is_priority' => false,
+        ]);
+
+        $response = $this->patchJson("/pipeline/{$deal->id}/priority");
+
+        $response->assertOk();
+        $response->assertJson([
+            'success' => true,
+            'is_priority' => true,
+        ]);
+        $this->assertTrue($deal->fresh()->is_priority);
     }
 
     public function test_creating_deal_from_lead_is_idempotent(): void

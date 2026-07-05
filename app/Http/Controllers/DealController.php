@@ -33,7 +33,12 @@ class DealController extends Controller
     {
         $this->authorize('viewAny', Deal::class);
 
-        $query = Deal::with(['lead.property', 'agent']);
+        $query = Deal::with([
+            'lead.property',
+            'lead.photos',
+            'agent',
+            'lenders.lender',
+        ]);
 
         if (auth()->user()->isAgent()) {
             $query->where('agent_id', auth()->id());
@@ -44,24 +49,66 @@ class DealController extends Controller
             $query->where('agent_id', $request->agent);
         }
 
+        if ($request->filled('stage')) {
+            $query->where('stage', $request->stage);
+        }
+
+        if ($request->filled('deal_type')) {
+            $query->where('deal_type', $request->deal_type);
+        }
+
+        if ($request->filled('lender')) {
+            $query->whereHas('lenders', fn ($lq) => $lq->where('lender_id', $request->lender));
+        }
+
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('title', 'like', "%{$search}%")
                   ->orWhereHas('lead', function ($lq) use ($search) {
-                      $lq->where(function ($inner) use ($search) {
+                      $fullNameSql = \DB::connection()->getDriverName() === 'sqlite'
+                          ? "first_name || ' ' || last_name"
+                          : "CONCAT(first_name, ' ', last_name)";
+                      $lq->where(function ($inner) use ($search, $fullNameSql) {
                           $inner->where('first_name', 'like', "%{$search}%")
-                                ->orWhere('last_name', 'like', "%{$search}%");
+                                ->orWhere('last_name', 'like', "%{$search}%")
+                                ->orWhereRaw("{$fullNameSql} LIKE ?", ["%{$search}%"]);
                       });
                   })
                   ->orWhereHas('lead.property', function ($pq) use ($search) {
-                      $pq->where('address', 'like', "%{$search}%");
+                      $pq->where('address', 'like', "%{$search}%")
+                         ->orWhere('city', 'like', "%{$search}%")
+                         ->orWhere('state', 'like', "%{$search}%")
+                         ->orWhere('zip_code', 'like', "%{$search}%");
                   });
             });
         }
 
-        $deals = $query->get()->groupBy('stage');
+        $deals = $query
+            ->orderByDesc('is_priority')
+            ->orderByDesc('stage_changed_at')
+            ->orderByDesc('updated_at')
+            ->get();
         $stages = Deal::stageLabels();
+        $dealTypes = Deal::dealTypes();
+
+        // Third summary bucket differs by business mode: real estate has an
+        // "inspection" stage, wholesale uses "dispositions" instead.
+        $isRealEstate = \App\Services\BusinessModeService::isRealEstate();
+        $midStageKeys = $isRealEstate ? ['inspection'] : ['dispositions'];
+
+        $summary = [
+            'total' => $deals->count(),
+            'in_contract' => $deals->whereIn('stage', ['under_contract', 'assigned'])->count(),
+            'mid_stage' => $deals->whereIn('stage', $midStageKeys)->count(),
+            'mid_stage_label' => $isRealEstate ? __('Under Inspection') : __('In Disposition'),
+            'pending_close' => $deals->whereIn('stage', ['closing'])->count(),
+            'closed_month' => $deals->filter(fn ($deal) => $deal->stage === 'closed_won' && $deal->stage_changed_at?->isCurrentMonth())->count(),
+            'in_contract_value' => $deals->whereIn('stage', ['under_contract', 'assigned'])->sum('contract_price'),
+            'mid_stage_value' => $deals->whereIn('stage', $midStageKeys)->sum('contract_price'),
+            'pending_close_value' => $deals->whereIn('stage', ['closing'])->sum('contract_price'),
+            'closed_month_value' => $deals->filter(fn ($deal) => $deal->stage === 'closed_won' && $deal->stage_changed_at?->isCurrentMonth())->sum('contract_price'),
+        ];
 
         // Agents for filter dropdown (admin only)
         $agents = collect();
@@ -72,7 +119,24 @@ class DealController extends Controller
                 ->get(['id', 'name']);
         }
 
-        return view('deals.pipeline', compact('deals', 'stages', 'agents'));
+        $lenders = \App\Models\Lender::orderBy('name')->get(['id', 'name', 'company']);
+        $viewMode = $request->input('view') === 'list' ? 'list' : 'card';
+
+        return view('deals.pipeline', compact('deals', 'stages', 'dealTypes', 'lenders', 'agents', 'summary', 'viewMode'));
+    }
+
+    public function togglePriority(Deal $deal)
+    {
+        $this->authorize('update', $deal);
+
+        $deal->update([
+            'is_priority' => ! $deal->is_priority,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'is_priority' => $deal->fresh()->is_priority,
+        ]);
     }
 
     public function updateStage(Request $request, Deal $deal)

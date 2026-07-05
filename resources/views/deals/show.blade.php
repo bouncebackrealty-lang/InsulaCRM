@@ -894,6 +894,15 @@
             <div class="card-body">
                 <form id="deal-edit-form">
                     <div class="mb-2">
+                        <label class="form-label">{{ __('Deal Type') }}</label>
+                        <select name="deal_type" class="form-select form-select-sm">
+                            <option value="">{{ __('Not Set') }}</option>
+                            @foreach(\App\Models\Deal::dealTypes() as $typeKey => $typeLabel)
+                                <option value="{{ $typeKey }}" {{ $deal->deal_type === $typeKey ? 'selected' : '' }}>{{ $typeLabel }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="mb-2">
                         <label class="form-label">{{ __('Contract Price ($)') }}</label>
                         <input type="number" name="contract_price" class="form-control form-control-sm" step="0.01" value="{{ $deal->contract_price }}">
                     </div>

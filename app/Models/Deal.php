@@ -26,6 +26,13 @@ class Deal extends Model
         'closed_lost' => 'Closed Lost',
     ];
 
+    public const DEAL_TYPES = [
+        'fix_and_flip' => 'Fix & Flip',
+        'wholesale' => 'Wholesale',
+        'rental' => 'Rental',
+        'other' => 'Other',
+    ];
+
     /**
      * Get pipeline stages for the current tenant's business mode.
      */
@@ -56,6 +63,8 @@ class Deal extends Model
         'agent_id',
         'title',
         'stage',
+        'deal_type',
+        'is_priority',
         'stage_changed_at',
         'contract_price',
         'assignment_fee',
@@ -89,7 +98,18 @@ class Deal extends Model
             'brokerage_split_pct' => 'decimal:2',
             'listing_date' => 'date',
             'stage_changed_at' => 'datetime',
+            'is_priority' => 'boolean',
         ];
+    }
+
+    public static function dealTypes(): array
+    {
+        return self::DEAL_TYPES;
+    }
+
+    public function getDealTypeLabelAttribute(): string
+    {
+        return self::DEAL_TYPES[$this->deal_type] ?? __('Not Set');
     }
 
     protected static function booted(): void

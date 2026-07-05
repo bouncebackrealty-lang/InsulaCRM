@@ -21,6 +21,8 @@ class DealFactory extends Factory
         return [
             'title' => fake()->streetAddress() . ' Deal',
             'stage' => $stage,
+            'deal_type' => fake()->randomElement(array_keys(Deal::dealTypes())),
+            'is_priority' => fake()->boolean(20),
             'stage_changed_at' => $stageChangedAt,
             'contract_price' => $contractPrice,
             'assignment_fee' => $assignmentFee,
