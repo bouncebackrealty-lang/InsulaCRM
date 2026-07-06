@@ -33,6 +33,7 @@ class PropertyFactory extends Factory
             'state' => fake()->stateAbbr(),
             'zip_code' => fake()->postcode(),
             'property_type' => fake()->randomElement(['single_family', 'multi_family', 'commercial', 'land', 'other']),
+            'deal_type' => fake()->optional(0.8)->randomElement(array_keys(\App\Models\Deal::dealTypes())),
             'bedrooms' => fake()->numberBetween(1, 6),
             'bathrooms' => fake()->numberBetween(1, 4),
             'square_footage' => fake()->numberBetween(800, 4000),

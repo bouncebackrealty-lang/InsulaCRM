@@ -122,8 +122,14 @@ class DealManagementTest extends TestCase
         $response->assertSee('Card View');
         $response->assertSee('List View');
         $response->assertSee('Add Deal');
-        // Wholesale tenants have no inspection stage; summary bucket uses Dispositions.
-        $response->assertSee('In Disposition');
+        $response->assertSee('Under Contract');
+        $response->assertSee('Dispositions');
+        $response->assertSee('Closing');
+        $response->assertSee('Closed');
+        $response->assertDontSee('In Contract');
+        $response->assertDontSee('In Disposition');
+        $response->assertDontSee('Pending Close');
+        $response->assertDontSee('Closed This Month');
         $response->assertDontSee('Under Inspection');
     }
 
@@ -179,12 +185,27 @@ class DealManagementTest extends TestCase
             'size' => 1000,
             'caption' => 'Front exterior',
         ]);
+        LeadPhoto::create([
+            'tenant_id' => $this->tenant->id,
+            'lead_id' => $lead->id,
+            'uploaded_by' => $this->adminUser->id,
+            'filename' => 'back.jpg',
+            'original_name' => 'back.jpg',
+            'path' => 'leads/photos/back.jpg',
+            'thumbnail_path' => 'leads/photos/thumb-back.jpg',
+            'mime_type' => 'image/jpeg',
+            'size' => 1000,
+            'caption' => 'Back exterior',
+        ]);
 
         $response = $this->get('/pipeline');
 
         $response->assertStatus(200);
         $response->assertSee('data-testid="pipeline-deal-card"', false);
-        $response->assertSee('thumb-front.jpg');
+        $response->assertSee('data-testid="pipeline-photo-trigger"', false);
+        $response->assertSee('Property Photos');
+        $response->assertSee('pipeline-lightbox-next');
+        $response->assertSee('pipeline-lightbox-prev');
         $response->assertSee($property->address);
         $response->assertSee('Atlanta');
         $response->assertSee('Under Contract');

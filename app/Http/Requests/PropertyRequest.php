@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Deal;
 use App\Services\BusinessModeService;
 use App\Services\CustomFieldService;
 use Illuminate\Foundation\Http\FormRequest;
@@ -25,6 +26,7 @@ class PropertyRequest extends FormRequest
             'state' => 'required|string|max:2',
             'zip_code' => 'required|string|max:10',
             'property_type' => "required|in:{$propertyTypes}",
+            'deal_type' => 'nullable|string|in:' . implode(',', array_keys(Deal::dealTypes())),
             'bedrooms' => 'nullable|integer|min:0',
             'bathrooms' => 'nullable|integer|min:0',
             'square_footage' => 'nullable|integer|min:0',

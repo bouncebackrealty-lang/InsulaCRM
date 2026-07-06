@@ -92,22 +92,20 @@ class DealController extends Controller
         $stages = Deal::stageLabels();
         $dealTypes = Deal::dealTypes();
 
-        // Third summary bucket differs by business mode: real estate has an
-        // "inspection" stage, wholesale uses "dispositions" instead.
         $isRealEstate = \App\Services\BusinessModeService::isRealEstate();
         $midStageKeys = $isRealEstate ? ['inspection'] : ['dispositions'];
 
         $summary = [
             'total' => $deals->count(),
-            'in_contract' => $deals->whereIn('stage', ['under_contract', 'assigned'])->count(),
+            'under_contract' => $deals->where('stage', 'under_contract')->count(),
             'mid_stage' => $deals->whereIn('stage', $midStageKeys)->count(),
-            'mid_stage_label' => $isRealEstate ? __('Under Inspection') : __('In Disposition'),
-            'pending_close' => $deals->whereIn('stage', ['closing'])->count(),
-            'closed_month' => $deals->filter(fn ($deal) => $deal->stage === 'closed_won' && $deal->stage_changed_at?->isCurrentMonth())->count(),
-            'in_contract_value' => $deals->whereIn('stage', ['under_contract', 'assigned'])->sum('contract_price'),
+            'mid_stage_label' => $isRealEstate ? __('Inspection') : __('Dispositions'),
+            'closing' => $deals->where('stage', 'closing')->count(),
+            'closed' => $deals->where('stage', 'closed_won')->count(),
+            'under_contract_value' => $deals->where('stage', 'under_contract')->sum('contract_price'),
             'mid_stage_value' => $deals->whereIn('stage', $midStageKeys)->sum('contract_price'),
-            'pending_close_value' => $deals->whereIn('stage', ['closing'])->sum('contract_price'),
-            'closed_month_value' => $deals->filter(fn ($deal) => $deal->stage === 'closed_won' && $deal->stage_changed_at?->isCurrentMonth())->sum('contract_price'),
+            'closing_value' => $deals->where('stage', 'closing')->sum('contract_price'),
+            'closed_value' => $deals->where('stage', 'closed_won')->sum('contract_price'),
         ];
 
         // Agents for filter dropdown (admin only)

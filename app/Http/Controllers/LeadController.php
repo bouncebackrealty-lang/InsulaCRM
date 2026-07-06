@@ -284,6 +284,8 @@ class LeadController extends Controller
         ];
 
         if ($property) {
+            $data['deal_type'] = $property->deal_type;
+
             if ($isWholesale) {
                 $data['contract_price'] = $property->our_offer ?: $property->asking_price ?: $property->estimated_value;
 
@@ -390,7 +392,7 @@ class LeadController extends Controller
         $this->authorize('update', $lead);
 
         $request->validate([
-            'photos' => 'required|array|max:10',
+            'photos' => 'required|array',
             'photos.*' => 'image|mimes:jpg,jpeg,png,gif,webp|max:10240',
             'captions' => 'nullable|array',
             'captions.*' => 'nullable|string|max:255',

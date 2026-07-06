@@ -19,6 +19,7 @@ class Property extends Model
         'state',
         'zip_code',
         'property_type',
+        'deal_type',
         'bedrooms',
         'bathrooms',
         'square_footage',

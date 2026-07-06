@@ -3,6 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\Lead;
+use App\Models\LeadPhoto;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class LeadManagementTest extends TestCase
@@ -111,6 +114,65 @@ class LeadManagementTest extends TestCase
             'maximum_allowable_offer' => 184300,
         ]);
         $this->assertEquals(9300, $lead->fresh()->property->assignment_fee);
+    }
+
+    public function test_admin_can_select_deal_type_on_property_intake_and_carry_it_to_deal(): void
+    {
+        $this->actingAsAdmin();
+        $lead = $this->createLead();
+
+        $leadPage = $this->get("/leads/{$lead->id}");
+        $leadPage->assertStatus(200);
+        $leadPage->assertSee('name="deal_type"', false);
+        $leadPage->assertSee('Fix &amp; Flip', false);
+        $leadPage->assertSee('Wholesale');
+        $leadPage->assertSee('Rental');
+
+        $response = $this->post("/leads/{$lead->id}/property", [
+            'address' => '4521 Mill Creek Road',
+            'city' => 'Atlanta',
+            'state' => 'GA',
+            'zip_code' => '30318',
+            'property_type' => 'single_family',
+            'deal_type' => 'fix_and_flip',
+            'condition' => 'fair',
+            'after_repair_value' => 340000,
+            'repair_estimate' => 60500,
+            'mao_percentage' => 70,
+            'our_offer' => 175000,
+        ]);
+
+        $response->assertRedirect("/leads/{$lead->id}");
+        $this->assertDatabaseHas('properties', [
+            'lead_id' => $lead->id,
+            'deal_type' => 'fix_and_flip',
+        ]);
+
+        $this->post("/leads/{$lead->id}/deals");
+
+        $this->assertDatabaseHas('deals', [
+            'lead_id' => $lead->id,
+            'deal_type' => 'fix_and_flip',
+        ]);
+    }
+
+    public function test_admin_can_upload_more_than_ten_photos_to_a_lead(): void
+    {
+        Storage::fake('public');
+        $this->actingAsAdmin();
+        $lead = $this->createLead();
+
+        $photos = [];
+        for ($i = 1; $i <= 12; $i++) {
+            $photos[] = UploadedFile::fake()->image("phase-{$i}.jpg", 20, 20);
+        }
+
+        $response = $this->post("/leads/{$lead->id}/photos", [
+            'photos' => $photos,
+        ]);
+
+        $response->assertRedirect("/leads/{$lead->id}");
+        $this->assertSame(12, LeadPhoto::where('lead_id', $lead->id)->count());
     }
 
     public function test_admin_can_create_lead_assigned_to_agent_team_member(): void

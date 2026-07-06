@@ -11,7 +11,7 @@
         @if($lead->property)
         <div class="mb-3 p-3 rounded" style="background: #f6f8fb;">
             <div class="row">
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <small class="text-secondary d-block">{{ __('Condition') }}</small>
                     <strong>{{ __(ucfirst($lead->property->condition ?? '-')) }}</strong>
                 </div>
@@ -30,7 +30,7 @@
                         {{ Fmt::currency($lead->property->mao ?? 0, 0) }}
                     </strong>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <small class="text-secondary d-block">{{ __('Distress Markers') }}</small>
                     @if(!empty($lead->property->distress_markers) && is_array($lead->property->distress_markers))
                         @foreach($lead->property->distress_markers as $marker)
@@ -106,7 +106,7 @@
                 </div>
             </div>
             <div class="row mb-3">
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label required">{{ __('Property Type') }}</label>
                     <select name="property_type" class="form-select" required>
                         @foreach(\App\Services\CustomFieldService::getOptions('property_type') as $val => $label)
@@ -114,7 +114,16 @@
                         @endforeach
                     </select>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
+                    <label class="form-label">{{ __('Deal Type') }}</label>
+                    <select name="deal_type" class="form-select">
+                        <option value="">{{ __('Not Set') }}</option>
+                        @foreach(\App\Models\Deal::dealTypes() as $typeKey => $typeLabel)
+                            <option value="{{ $typeKey }}" {{ old('deal_type', $lead->property->deal_type ?? '') === $typeKey ? 'selected' : '' }}>{{ $typeLabel }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-md-2">
                     <label class="form-label">{{ __('Condition') }}</label>
                     <select name="condition" class="form-select">
                         <option value="">{{ __('Select...') }}</option>

@@ -19,6 +19,8 @@
         'closed_won' => 'green',
         'closed_lost' => 'red',
     ];
+    $pipelineStageLabels = $stages;
+    $pipelineStageLabels['closed_won'] = __('Closed');
     $buildViewUrl = fn ($view) => request()->fullUrlWithQuery(['view' => $view]);
 @endphp
 
@@ -168,6 +170,16 @@
         width: 100%;
         height: 100%;
         object-fit: cover;
+        display: block;
+    }
+
+    .pipeline-photo-trigger {
+        width: 100%;
+        height: 100%;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        cursor: zoom-in;
         display: block;
     }
 
@@ -335,6 +347,62 @@
         background: #fff;
     }
 
+    .pipeline-lightbox-modal .modal-dialog {
+        max-width: 100vw;
+        margin: 0;
+        height: 100vh;
+    }
+
+    .pipeline-lightbox-modal .modal-content {
+        min-height: 100vh;
+        border: 0;
+        border-radius: 0;
+        background: rgba(4, 12, 24, 0.96);
+        color: #fff;
+    }
+
+    .pipeline-lightbox-body {
+        min-height: calc(100vh - 64px);
+        display: grid;
+        grid-template-columns: 56px minmax(0, 1fr) 56px;
+        align-items: center;
+        gap: 12px;
+        padding: 16px;
+    }
+
+    .pipeline-lightbox-image-wrap {
+        height: calc(100vh - 150px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    #pipeline-lightbox-image {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+        border-radius: 6px;
+    }
+
+    .pipeline-lightbox-nav {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        border: 1px solid rgba(255,255,255,0.35);
+        background: rgba(255,255,255,0.12);
+        color: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .pipeline-lightbox-caption {
+        min-height: 44px;
+        color: rgba(255,255,255,0.78);
+        text-align: center;
+        padding: 0 16px 18px;
+    }
+
     @media (max-width: 1200px) {
         .pipeline-summary-grid {
             grid-template-columns: repeat(3, minmax(150px, 1fr));
@@ -375,6 +443,17 @@
         .pipeline-card-grid {
             grid-template-columns: 1fr;
         }
+
+        .pipeline-lightbox-body {
+            grid-template-columns: 42px minmax(0, 1fr) 42px;
+            gap: 6px;
+            padding: 10px;
+        }
+
+        .pipeline-lightbox-nav {
+            width: 38px;
+            height: 38px;
+        }
     }
 </style>
 @endpush
@@ -407,9 +486,9 @@
                 <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="22" height="22" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="M9 11l3 3l8 -8"/><path d="M20 12v6a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h9"/></svg>
             </span>
             <div>
-                <div class="summary-value">{{ $summary['in_contract'] }}</div>
-                <div class="summary-label">{{ __('In Contract') }}</div>
-                <div class="summary-money">{{ $formatMoney($summary['in_contract_value']) }}</div>
+                <div class="summary-value">{{ $summary['under_contract'] }}</div>
+                <div class="summary-label">{{ __('Under Contract') }}</div>
+                <div class="summary-money">{{ $formatMoney($summary['under_contract_value']) }}</div>
             </div>
         </div>
         <div class="pipeline-summary-card">
@@ -427,9 +506,9 @@
                 <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="22" height="22" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="M12 8v4l3 3"/><path d="M3.05 11a9 9 0 1 1 .5 4"/></svg>
             </span>
             <div>
-                <div class="summary-value">{{ $summary['pending_close'] }}</div>
-                <div class="summary-label">{{ __('Pending Close') }}</div>
-                <div class="summary-money">{{ $formatMoney($summary['pending_close_value']) }}</div>
+                <div class="summary-value">{{ $summary['closing'] }}</div>
+                <div class="summary-label">{{ __('Closing') }}</div>
+                <div class="summary-money">{{ $formatMoney($summary['closing_value']) }}</div>
             </div>
         </div>
         <div class="pipeline-summary-card">
@@ -437,9 +516,9 @@
                 <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="22" height="22" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="M12 3l8 4.5v9l-8 4.5l-8 -4.5v-9z"/><path d="M12 12l8 -4.5"/><path d="M12 12v9"/><path d="M12 12l-8 -4.5"/></svg>
             </span>
             <div>
-                <div class="summary-value">{{ $summary['closed_month'] }}</div>
-                <div class="summary-label">{{ __('Closed This Month') }}</div>
-                <div class="summary-money">{{ $formatMoney($summary['closed_month_value']) }}</div>
+                <div class="summary-value">{{ $summary['closed'] }}</div>
+                <div class="summary-label">{{ __('Closed') }}</div>
+                <div class="summary-money">{{ $formatMoney($summary['closed_value']) }}</div>
             </div>
         </div>
     </div>
@@ -450,7 +529,7 @@
             <label for="pipeline-stage-filter" class="visually-hidden">{{ __('Stage') }}</label>
             <select id="pipeline-stage-filter" name="stage" class="form-select" data-testid="pipeline-stage-filter" onchange="this.form.submit()">
                 <option value="">{{ __('All Stages') }}</option>
-                @foreach($stages as $stageKey => $stageLabel)
+                @foreach($pipelineStageLabels as $stageKey => $stageLabel)
                     <option value="{{ $stageKey }}" @selected(request('stage') === $stageKey)>{{ $stageLabel }}</option>
                 @endforeach
             </select>
@@ -536,10 +615,10 @@
                             </td>
                             <td>
                                 <div class="dropdown">
-                                    <a href="#" class="badge bg-{{ $stageColor }} text-decoration-none" data-bs-toggle="dropdown" title="{{ __('Move to stage') }}">{{ $stages[$deal->stage] ?? $deal->stage }}</a>
+                                    <a href="#" class="badge bg-{{ $stageColor }} text-decoration-none" data-bs-toggle="dropdown" title="{{ __('Move to stage') }}">{{ $pipelineStageLabels[$deal->stage] ?? $deal->stage }}</a>
                                     <div class="dropdown-menu">
                                         <span class="dropdown-header">{{ __('Move to stage') }}</span>
-                                        @foreach($stages as $moveStageKey => $moveStageLabel)
+                                        @foreach($pipelineStageLabels as $moveStageKey => $moveStageLabel)
                                             @if($moveStageKey !== $deal->stage)
                                                 <a href="#" class="dropdown-item move-stage-btn" data-stage="{{ $moveStageKey }}" data-stage-url="{{ route('deals.updateStage', $deal) }}">{{ $moveStageLabel }}</a>
                                             @endif
@@ -564,7 +643,12 @@
             @foreach($deals as $deal)
                 @php
                     $property = $deal->lead?->property;
-                    $photo = $deal->lead?->photos?->sortBy('created_at')->first();
+                    $photos = $deal->lead?->photos?->sortBy('created_at')->values() ?? collect();
+                    $photo = $photos->first();
+                    $galleryPhotos = $photos->map(fn ($photo) => [
+                        'url' => $photo->url,
+                        'caption' => $photo->caption ?: $photo->original_name,
+                    ])->values();
                     $daysInStage = $deal->stage_changed_at ? (int) now()->diffInDays($deal->stage_changed_at, true) : 0;
                     $stageColor = $stageColors[$deal->stage] ?? 'secondary';
                     $lenderName = $deal->lenders->first()?->lender?->company ?: $deal->lenders->first()?->lender?->name;
@@ -576,13 +660,15 @@
                 <article class="pipeline-deal-card" data-testid="pipeline-deal-card" data-deal-id="{{ $deal->id }}">
                     <div class="pipeline-card-photo">
                         @if($photo)
-                            <img src="{{ $photo->thumbnail_url }}" alt="{{ $photo->caption ?: $photo->original_name }}">
+                            <button type="button" class="pipeline-photo-trigger" data-testid="pipeline-photo-trigger" data-gallery="{{ base64_encode($galleryPhotos->toJson()) }}" data-start-index="0" aria-label="{{ __('Open photo gallery') }}">
+                                <img src="{{ $photo->thumbnail_url }}" alt="{{ $photo->caption ?: $photo->original_name }}">
+                            </button>
                         @else
                             <div class="pipeline-photo-fallback" data-testid="pipeline-photo-fallback">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="42" height="42" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor" fill="none"><path d="M3 21h18"/><path d="M5 21v-14l8 -4v18"/><path d="M19 21v-10l-6 -4"/><path d="M9 9v.01"/><path d="M9 12v.01"/><path d="M9 15v.01"/></svg>
                             </div>
                         @endif
-                        <span class="badge bg-{{ $stageColor }} pipeline-stage-badge" data-testid="pipeline-stage-badge">{{ $stages[$deal->stage] ?? $deal->stage }}</span>
+                        <span class="badge bg-{{ $stageColor }} pipeline-stage-badge" data-testid="pipeline-stage-badge">{{ $pipelineStageLabels[$deal->stage] ?? $deal->stage }}</span>
                         <button type="button" class="priority-star {{ $deal->is_priority ? 'is-priority' : '' }}" data-testid="pipeline-priority-star" data-deal-id="{{ $deal->id }}" data-priority-url="{{ route('deals.togglePriority', $deal) }}" aria-label="{{ __('Toggle priority') }}">
                             <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="17" height="17" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="{{ $deal->is_priority ? 'currentColor' : 'none' }}"><path d="M12 17.75l-6.172 3.245l1.179 -6.873l-4.993 -4.867l6.9 -1.002l3.086 -6.253l3.086 6.253l6.9 1.002l-4.993 4.867l1.179 6.873z"/></svg>
                         </button>
@@ -634,7 +720,7 @@
                                 </button>
                                 <div class="dropdown-menu dropdown-menu-end">
                                     <span class="dropdown-header">{{ __('Move to stage') }}</span>
-                                    @foreach($stages as $moveStageKey => $moveStageLabel)
+                                    @foreach($pipelineStageLabels as $moveStageKey => $moveStageLabel)
                                         @if($moveStageKey !== $deal->stage)
                                             <a href="#" class="dropdown-item move-stage-btn" data-stage="{{ $moveStageKey }}" data-stage-url="{{ route('deals.updateStage', $deal) }}">{{ $moveStageLabel }}</a>
                                         @endif
@@ -648,12 +734,99 @@
         </div>
     @endif
 </div>
+
+<div class="modal fade pipeline-lightbox-modal" id="pipelinePhotoLightbox" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <div>
+                    <h5 class="modal-title">{{ __('Property Photos') }}</h5>
+                    <div class="text-white-50 small" id="pipeline-lightbox-counter"></div>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="{{ __('Close') }}"></button>
+            </div>
+            <div class="pipeline-lightbox-body">
+                <button type="button" class="pipeline-lightbox-nav" id="pipeline-lightbox-prev" aria-label="{{ __('Previous photo') }}">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="26" height="26" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="M15 6l-6 6l6 6"/></svg>
+                </button>
+                <div class="pipeline-lightbox-image-wrap">
+                    <img src="" alt="" id="pipeline-lightbox-image">
+                </div>
+                <button type="button" class="pipeline-lightbox-nav" id="pipeline-lightbox-next" aria-label="{{ __('Next photo') }}">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="26" height="26" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="M9 6l6 6l-6 6"/></svg>
+                </button>
+            </div>
+            <div class="pipeline-lightbox-caption" id="pipeline-lightbox-caption"></div>
+        </div>
+    </div>
+</div>
 @endsection
 
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    var galleryPhotos = [];
+    var galleryIndex = 0;
+    var lightboxEl = document.getElementById('pipelinePhotoLightbox');
+    var lightbox = lightboxEl && window.bootstrap ? new bootstrap.Modal(lightboxEl) : null;
+    var lightboxImage = document.getElementById('pipeline-lightbox-image');
+    var lightboxCaption = document.getElementById('pipeline-lightbox-caption');
+    var lightboxCounter = document.getElementById('pipeline-lightbox-counter');
+    var lightboxPrev = document.getElementById('pipeline-lightbox-prev');
+    var lightboxNext = document.getElementById('pipeline-lightbox-next');
+
+    function renderLightboxPhoto() {
+        if (!galleryPhotos.length || !lightboxImage) return;
+
+        var photo = galleryPhotos[galleryIndex];
+        lightboxImage.src = photo.url || '';
+        lightboxImage.alt = photo.caption || '{{ __('Property photo') }}';
+        if (lightboxCaption) lightboxCaption.textContent = photo.caption || '';
+        if (lightboxCounter) lightboxCounter.textContent = (galleryIndex + 1) + ' / ' + galleryPhotos.length;
+        if (lightboxPrev) lightboxPrev.disabled = galleryPhotos.length <= 1;
+        if (lightboxNext) lightboxNext.disabled = galleryPhotos.length <= 1;
+    }
+
+    function moveLightbox(step) {
+        if (!galleryPhotos.length) return;
+        galleryIndex = (galleryIndex + step + galleryPhotos.length) % galleryPhotos.length;
+        renderLightboxPhoto();
+    }
+
+    document.querySelectorAll('.pipeline-photo-trigger').forEach(function (button) {
+        button.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            try {
+                galleryPhotos = JSON.parse(atob(button.dataset.gallery || 'W10='));
+            } catch (error) {
+                galleryPhotos = [];
+            }
+
+            if (!galleryPhotos.length || !lightbox) return;
+
+            galleryIndex = parseInt(button.dataset.startIndex || '0', 10) || 0;
+            renderLightboxPhoto();
+            lightbox.show();
+        });
+    });
+
+    if (lightboxPrev) {
+        lightboxPrev.addEventListener('click', function () { moveLightbox(-1); });
+    }
+
+    if (lightboxNext) {
+        lightboxNext.addEventListener('click', function () { moveLightbox(1); });
+    }
+
+    if (lightboxEl) {
+        lightboxEl.addEventListener('keydown', function (event) {
+            if (event.key === 'ArrowLeft') moveLightbox(-1);
+            if (event.key === 'ArrowRight') moveLightbox(1);
+        });
+    }
 
     document.querySelectorAll('.priority-star').forEach(function (button) {
         button.addEventListener('click', function (event) {

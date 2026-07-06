@@ -52,7 +52,7 @@
                     <div class="text-secondary" style="font-size:13px;">
                         {{ __('Drop photos here or') }} <strong class="text-primary">{{ __('click to browse') }}</strong>
                     </div>
-                    <small class="text-secondary">{{ __('JPG, PNG, GIF, WebP. Max 10MB each, up to 10 at a time.') }}</small>
+                    <small class="text-secondary">{{ __('JPG, PNG, GIF, WebP. Max 10MB each.') }}</small>
                     <input type="file" name="photos[]" id="photo-file-input" multiple accept="image/jpeg,image/png,image/gif,image/webp" class="d-none">
                 </div>
             </div>
@@ -61,7 +61,7 @@
                 <span class="text-secondary" id="photo-count-label">{{ __('0 selected') }}</span>
                 <div>
                     <button type="button" class="btn btn-ghost-secondary btn-sm" id="photo-clear-btn">{{ __('Clear') }}</button>
-                    <button type="submit" class="btn btn-primary btn-sm">
+                    <button type="submit" class="btn btn-primary btn-sm" id="photo-upload-submit">
                         <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2"/><polyline points="7 9 12 4 17 9"/><line x1="12" y1="4" x2="12" y2="16"/></svg>
                         {{ __('Upload Photos') }}
                     </button>
@@ -94,6 +94,8 @@ document.addEventListener('DOMContentLoaded', function() {
     var countLabel = document.getElementById('photo-count-label');
     var clearBtn = document.getElementById('photo-clear-btn');
     var form = document.getElementById('photo-upload-form');
+    var submitBtn = document.getElementById('photo-upload-submit');
+    var batchSize = 20;
 
     // Click to browse
     dropZone.addEventListener('click', function() { fileInput.click(); });
@@ -128,7 +130,7 @@ document.addEventListener('DOMContentLoaded', function() {
         actions.style.display = 'flex';
         countLabel.textContent = files.length + ' {{ __('selected') }}';
 
-        for (var i = 0; i < Math.min(files.length, 10); i++) {
+        for (var i = 0; i < files.length; i++) {
             (function(index) {
                 var file = files[index];
                 var col = document.createElement('div');
@@ -151,6 +153,75 @@ document.addEventListener('DOMContentLoaded', function() {
         previewArea.style.display = 'none';
         actions.style.display = 'none';
     });
+
+    form.addEventListener('submit', function(e) {
+        var files = Array.prototype.slice.call(fileInput.files || []);
+        if (files.length <= batchSize || !window.fetch) {
+            return;
+        }
+
+        e.preventDefault();
+        uploadInBatches(files);
+    });
+
+    function captionFor(index) {
+        var input = previewArea.querySelector('input[name="captions[' + index + ']"]');
+        return input ? input.value : '';
+    }
+
+    function setUploadingState(isUploading, label) {
+        if (submitBtn) {
+            submitBtn.disabled = isUploading;
+        }
+        if (clearBtn) {
+            clearBtn.disabled = isUploading;
+        }
+        countLabel.textContent = label;
+    }
+
+    function uploadInBatches(files) {
+        var token = form.querySelector('input[name="_token"]').value;
+        var total = files.length;
+        var uploaded = 0;
+
+        setUploadingState(true, '{{ __('Uploading photos...') }}');
+
+        function sendNextBatch(start) {
+            var batch = files.slice(start, start + batchSize);
+            var payload = new FormData();
+            payload.append('_token', token);
+
+            batch.forEach(function(file, offset) {
+                payload.append('photos[]', file);
+                payload.append('captions[]', captionFor(start + offset));
+            });
+
+            return fetch(form.action, {
+                method: 'POST',
+                body: payload,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            }).then(function(response) {
+                if (!response.ok) {
+                    throw new Error('Upload failed');
+                }
+
+                uploaded += batch.length;
+                setUploadingState(true, uploaded + ' / ' + total + ' {{ __('uploaded') }}');
+
+                if (uploaded < total) {
+                    return sendNextBatch(uploaded);
+                }
+
+                window.location.reload();
+            });
+        }
+
+        sendNextBatch(0).catch(function() {
+            setUploadingState(false, '{{ __('Upload failed. Please try again.') }}');
+        });
+    }
 
     // Lightbox
     var lightboxModal = document.getElementById('photo-lightbox');
