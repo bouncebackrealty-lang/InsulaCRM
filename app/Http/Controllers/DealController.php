@@ -99,6 +99,7 @@ class DealController extends Controller
             'total' => $deals->count(),
             'under_contract' => $deals->where('stage', 'under_contract')->count(),
             'mid_stage' => $deals->whereIn('stage', $midStageKeys)->count(),
+            'mid_stage_key' => $midStageKeys[0],
             'mid_stage_label' => $isRealEstate ? __('Inspection') : __('Dispositions'),
             'closing' => $deals->where('stage', 'closing')->count(),
             'closed' => $deals->where('stage', 'closed_won')->count(),

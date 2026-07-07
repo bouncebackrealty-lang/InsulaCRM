@@ -133,6 +133,42 @@ class DealManagementTest extends TestCase
         $response->assertDontSee('Under Inspection');
     }
 
+    public function test_pipeline_stage_colors_are_unique_and_match_summary_tiles(): void
+    {
+        $this->actingAsAdmin();
+
+        $stageClasses = [
+            'prospecting' => 'pipeline-stage-prospecting',
+            'contacting' => 'pipeline-stage-contacting',
+            'engaging' => 'pipeline-stage-engaging',
+            'offer_presented' => 'pipeline-stage-offer-presented',
+            'under_contract' => 'pipeline-stage-under-contract',
+            'dispositions' => 'pipeline-stage-dispositions',
+            'assigned' => 'pipeline-stage-assigned',
+            'closing' => 'pipeline-stage-closing',
+            'closed_won' => 'pipeline-stage-closed-won',
+            'closed_lost' => 'pipeline-stage-closed-lost',
+        ];
+
+        $this->assertSameSize($stageClasses, array_unique($stageClasses));
+
+        foreach (array_keys($stageClasses) as $stage) {
+            $this->createDeal(['stage' => $stage]);
+        }
+
+        $response = $this->get('/pipeline');
+
+        $response->assertStatus(200);
+        foreach ($stageClasses as $stageClass) {
+            $response->assertSee('class="badge ' . $stageClass . ' pipeline-stage-badge"', false);
+        }
+
+        $response->assertSee('class="summary-icon pipeline-stage-under-contract"', false);
+        $response->assertSee('class="summary-icon pipeline-stage-dispositions"', false);
+        $response->assertSee('class="summary-icon pipeline-stage-closing"', false);
+        $response->assertSee('class="summary-icon pipeline-stage-closed-won"', false);
+    }
+
     public function test_pipeline_card_renders_expected_public_deal_fields_without_internal_fee(): void
     {
         $this->actingAsAdmin();

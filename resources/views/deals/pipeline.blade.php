@@ -6,19 +6,26 @@
 @php
     $formatMoney = fn ($value) => $value !== null && $value !== '' ? Fmt::currency($value, 0) : '-';
     $stageColors = [
-        'prospecting' => 'secondary',
-        'contacting' => 'cyan',
-        'engaging' => 'blue',
-        'offer_presented' => 'orange',
-        'under_contract' => 'primary',
-        'inspection' => 'green',
-        'under_inspection' => 'green',
-        'dispositions' => 'purple',
-        'assigned' => 'indigo',
-        'closing' => 'yellow',
-        'closed_won' => 'green',
-        'closed_lost' => 'red',
+        'prospecting' => 'pipeline-stage-prospecting',
+        'contacting' => 'pipeline-stage-contacting',
+        'engaging' => 'pipeline-stage-engaging',
+        'offer_presented' => 'pipeline-stage-offer-presented',
+        'under_contract' => 'pipeline-stage-under-contract',
+        'dispositions' => 'pipeline-stage-dispositions',
+        'assigned' => 'pipeline-stage-assigned',
+        'closing' => 'pipeline-stage-closing',
+        'closed_won' => 'pipeline-stage-closed-won',
+        'closed_lost' => 'pipeline-stage-closed-lost',
+        'lead' => 'pipeline-stage-lead',
+        'listing_agreement' => 'pipeline-stage-listing-agreement',
+        'active_listing' => 'pipeline-stage-active-listing',
+        'showing' => 'pipeline-stage-showing',
+        'offer_received' => 'pipeline-stage-offer-received',
+        'inspection' => 'pipeline-stage-inspection',
+        'under_inspection' => 'pipeline-stage-inspection',
+        'appraisal' => 'pipeline-stage-appraisal',
     ];
+    $fallbackStageColor = 'pipeline-stage-default';
     $pipelineStageLabels = $stages;
     $pipelineStageLabels['closed_won'] = __('Closed');
     $buildViewUrl = fn ($view) => request()->fullUrlWithQuery(['view' => $view]);
@@ -80,11 +87,25 @@
         flex: 0 0 auto;
     }
 
-    .summary-icon.blue { background: #206bc4; }
-    .summary-icon.green { background: #2fb344; }
-    .summary-icon.orange { background: #f59f00; }
-    .summary-icon.purple { background: #ae3ec9; }
-    .summary-icon.teal { background: #0ca678; }
+    .pipeline-stage-total { background: #0f172a !important; color: #fff !important; }
+    .pipeline-stage-prospecting { background: #64748b !important; color: #fff !important; }
+    .pipeline-stage-contacting { background: #0891b2 !important; color: #fff !important; }
+    .pipeline-stage-engaging { background: #2563eb !important; color: #fff !important; }
+    .pipeline-stage-offer-presented { background: #f97316 !important; color: #fff !important; }
+    .pipeline-stage-under-contract { background: #16a34a !important; color: #fff !important; }
+    .pipeline-stage-dispositions { background: #9333ea !important; color: #fff !important; }
+    .pipeline-stage-assigned { background: #4f46e5 !important; color: #fff !important; }
+    .pipeline-stage-closing { background: #ca8a04 !important; color: #fff !important; }
+    .pipeline-stage-closed-won { background: #0f766e !important; color: #fff !important; }
+    .pipeline-stage-closed-lost { background: #dc2626 !important; color: #fff !important; }
+    .pipeline-stage-lead { background: #64748b !important; color: #fff !important; }
+    .pipeline-stage-listing-agreement { background: #0891b2 !important; color: #fff !important; }
+    .pipeline-stage-active-listing { background: #2563eb !important; color: #fff !important; }
+    .pipeline-stage-showing { background: #7c3aed !important; color: #fff !important; }
+    .pipeline-stage-offer-received { background: #f97316 !important; color: #fff !important; }
+    .pipeline-stage-inspection { background: #84cc16 !important; color: #172554 !important; }
+    .pipeline-stage-appraisal { background: #d946ef !important; color: #fff !important; }
+    .pipeline-stage-default { background: #6c757d !important; color: #fff !important; }
 
     .summary-value {
         font-size: 1.3rem;
@@ -473,7 +494,7 @@
 
     <div class="pipeline-summary-grid" data-testid="pipeline-summary-bar">
         <div class="pipeline-summary-card">
-            <span class="summary-icon blue">
+            <span class="summary-icon pipeline-stage-total">
                 <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="22" height="22" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0"/><path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2"/></svg>
             </span>
             <div>
@@ -482,7 +503,7 @@
             </div>
         </div>
         <div class="pipeline-summary-card">
-            <span class="summary-icon green">
+            <span class="summary-icon {{ $stageColors['under_contract'] }}">
                 <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="22" height="22" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="M9 11l3 3l8 -8"/><path d="M20 12v6a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h9"/></svg>
             </span>
             <div>
@@ -492,7 +513,7 @@
             </div>
         </div>
         <div class="pipeline-summary-card">
-            <span class="summary-icon orange">
+            <span class="summary-icon {{ $stageColors[$summary['mid_stage_key']] ?? $fallbackStageColor }}">
                 <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="22" height="22" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="M10 10m-7 0a7 7 0 1 0 14 0a7 7 0 1 0 -14 0"/><path d="M21 21l-6 -6"/></svg>
             </span>
             <div>
@@ -502,7 +523,7 @@
             </div>
         </div>
         <div class="pipeline-summary-card">
-            <span class="summary-icon purple">
+            <span class="summary-icon {{ $stageColors['closing'] }}">
                 <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="22" height="22" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="M12 8v4l3 3"/><path d="M3.05 11a9 9 0 1 1 .5 4"/></svg>
             </span>
             <div>
@@ -512,7 +533,7 @@
             </div>
         </div>
         <div class="pipeline-summary-card">
-            <span class="summary-icon teal">
+            <span class="summary-icon {{ $stageColors['closed_won'] }}">
                 <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="22" height="22" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="M12 3l8 4.5v9l-8 4.5l-8 -4.5v-9z"/><path d="M12 12l8 -4.5"/><path d="M12 12v9"/><path d="M12 12l-8 -4.5"/></svg>
             </span>
             <div>
@@ -600,7 +621,7 @@
                         @php
                             $property = $deal->lead?->property;
                             $daysInStage = $deal->stage_changed_at ? (int) now()->diffInDays($deal->stage_changed_at, true) : 0;
-                            $stageColor = $stageColors[$deal->stage] ?? 'secondary';
+                            $stageColor = $stageColors[$deal->stage] ?? $fallbackStageColor;
                             $lenderName = $deal->lenders->first()?->lender?->company ?: $deal->lenders->first()?->lender?->name;
                         @endphp
                         <tr data-testid="pipeline-list-row">
@@ -615,7 +636,7 @@
                             </td>
                             <td>
                                 <div class="dropdown">
-                                    <a href="#" class="badge bg-{{ $stageColor }} text-decoration-none" data-bs-toggle="dropdown" title="{{ __('Move to stage') }}">{{ $pipelineStageLabels[$deal->stage] ?? $deal->stage }}</a>
+                                    <a href="#" class="badge {{ $stageColor }} text-decoration-none" data-bs-toggle="dropdown" title="{{ __('Move to stage') }}">{{ $pipelineStageLabels[$deal->stage] ?? $deal->stage }}</a>
                                     <div class="dropdown-menu">
                                         <span class="dropdown-header">{{ __('Move to stage') }}</span>
                                         @foreach($pipelineStageLabels as $moveStageKey => $moveStageLabel)
@@ -650,7 +671,7 @@
                         'caption' => $photo->caption ?: $photo->original_name,
                     ])->values();
                     $daysInStage = $deal->stage_changed_at ? (int) now()->diffInDays($deal->stage_changed_at, true) : 0;
-                    $stageColor = $stageColors[$deal->stage] ?? 'secondary';
+                    $stageColor = $stageColors[$deal->stage] ?? $fallbackStageColor;
                     $lenderName = $deal->lenders->first()?->lender?->company ?: $deal->lenders->first()?->lender?->name;
                     $displayDateLabel = $deal->stage === 'closed_won' ? __('Closed') : ($deal->contract_date ? __('Contract') : __('Added'));
                     $displayDate = $deal->stage === 'closed_won'
@@ -668,7 +689,7 @@
                                 <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="42" height="42" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor" fill="none"><path d="M3 21h18"/><path d="M5 21v-14l8 -4v18"/><path d="M19 21v-10l-6 -4"/><path d="M9 9v.01"/><path d="M9 12v.01"/><path d="M9 15v.01"/></svg>
                             </div>
                         @endif
-                        <span class="badge bg-{{ $stageColor }} pipeline-stage-badge" data-testid="pipeline-stage-badge">{{ $pipelineStageLabels[$deal->stage] ?? $deal->stage }}</span>
+                        <span class="badge {{ $stageColor }} pipeline-stage-badge" data-testid="pipeline-stage-badge">{{ $pipelineStageLabels[$deal->stage] ?? $deal->stage }}</span>
                         <button type="button" class="priority-star {{ $deal->is_priority ? 'is-priority' : '' }}" data-testid="pipeline-priority-star" data-deal-id="{{ $deal->id }}" data-priority-url="{{ route('deals.togglePriority', $deal) }}" aria-label="{{ __('Toggle priority') }}">
                             <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="17" height="17" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="{{ $deal->is_priority ? 'currentColor' : 'none' }}"><path d="M12 17.75l-6.172 3.245l1.179 -6.873l-4.993 -4.867l6.9 -1.002l3.086 -6.253l3.086 6.253l6.9 1.002l-4.993 4.867l1.179 6.873z"/></svg>
                         </button>
