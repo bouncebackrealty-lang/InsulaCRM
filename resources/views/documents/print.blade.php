@@ -116,7 +116,6 @@
         .document-content table td,
         .document-content table th {
             padding: 8px;
-            border: 1px solid #ddd;
             text-align: left;
         }
 
@@ -177,14 +176,16 @@
     </style>
 </head>
 <body>
-    {{-- Screen-only toolbar --}}
-    <div class="print-controls">
-        <span class="doc-title">{{ $documentName ?? __('Document') }}</span>
-        <div>
-            <button class="btn btn-secondary" onclick="window.close()">{{ __('Close') }}</button>
-            <button class="btn btn-primary" onclick="window.print()">{{ __('Print / Save PDF') }}</button>
+    @if ($showControls ?? true)
+        {{-- Screen-only toolbar --}}
+        <div class="print-controls">
+            <span class="doc-title">{{ $documentName ?? __('Document') }}</span>
+            <div>
+                <button class="btn btn-secondary" onclick="window.close()">{{ __('Close') }}</button>
+                <button class="btn btn-primary" onclick="window.print()">{{ __('Print / Save PDF') }}</button>
+            </div>
         </div>
-    </div>
+    @endif
 
     <div class="document-container">
         <div class="document-content">
@@ -192,13 +193,15 @@
         </div>
     </div>
 
-    <script>
-        // Auto-trigger print dialog after a brief delay for rendering
-        window.addEventListener('load', function() {
-            setTimeout(function() {
-                window.print();
-            }, 500);
-        });
-    </script>
+    @if ($autoPrint ?? true)
+        <script>
+            // Auto-trigger print dialog after a brief delay for rendering
+            window.addEventListener('load', function() {
+                setTimeout(function() {
+                    window.print();
+                }, 500);
+            });
+        </script>
+    @endif
 </body>
 </html>

@@ -333,6 +333,7 @@ Route::middleware(['auth', 'tenant', 'require2fa'])->group(function () {
         Route::get('/pipeline/{deal}/documents/generate', [DocumentGeneratorController::class, 'create'])->name('documents.generate');
         Route::post('/pipeline/{deal}/documents/generate', [DocumentGeneratorController::class, 'store'])->name('documents.store');
         Route::post('/documents/preview-deal/{deal}', [DocumentGeneratorController::class, 'previewWithDeal'])->name('documents.previewWithDeal');
+        Route::get('/documents/{document}/download-pdf', [DocumentGeneratorController::class, 'downloadPdf'])->name('documents.downloadPdf');
         Route::get('/documents/{document}', [DocumentGeneratorController::class, 'show'])->name('documents.show');
         Route::get('/documents/{document}/print', [DocumentGeneratorController::class, 'print'])->name('documents.print');
         Route::delete('/documents/{document}', [DocumentGeneratorController::class, 'destroy'])->name('documents.destroy');
@@ -630,4 +631,3 @@ Route::middleware(['auth', 'tenant', 'require2fa'])->group(function () {
     Route::get('/help', [KnowledgeBaseController::class, 'index'])->name('help.index');
     Route::get('/help/{slug}', [KnowledgeBaseController::class, 'show'])->name('help.show');
 });
-

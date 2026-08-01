@@ -19,9 +19,9 @@
             <div class="card-header">
                 <h3 class="card-title">{{ $document->name }}</h3>
                 <div class="card-actions">
-                    <a href="{{ route('documents.print', $document) }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                    <a href="{{ route('documents.downloadPdf', $document) }}" class="btn btn-sm btn-primary">
                         <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-sm" width="18" height="18" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M17 17h2a2 2 0 0 0 2 -2v-4a2 2 0 0 0 -2 -2h-14a2 2 0 0 0 -2 2v4a2 2 0 0 0 2 2h2"/><path d="M17 9v-4a2 2 0 0 0 -2 -2h-6a2 2 0 0 0 -2 2v4"/><rect x="7" y="13" width="10" height="8" rx="2"/></svg>
-                        {{ __('Print / Save PDF') }}
+                        {{ __('Download PDF') }}
                     </a>
                 </div>
             </div>
@@ -75,9 +75,12 @@
             </div>
             <div class="card-body">
                 <div class="d-grid gap-2">
-                    <a href="{{ route('documents.print', $document) }}" target="_blank" class="btn btn-primary">
+                    <a href="{{ route('documents.downloadPdf', $document) }}" class="btn btn-primary">
                         <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M17 17h2a2 2 0 0 0 2 -2v-4a2 2 0 0 0 -2 -2h-14a2 2 0 0 0 -2 2v4a2 2 0 0 0 2 2h2"/><path d="M17 9v-4a2 2 0 0 0 -2 -2h-6a2 2 0 0 0 -2 2v4"/><rect x="7" y="13" width="10" height="8" rx="2"/></svg>
-                        {{ __('Print / Save as PDF') }}
+                        {{ __('Download PDF') }}
+                    </a>
+                    <a href="{{ route('documents.print', $document) }}" target="_blank" class="btn btn-outline-secondary">
+                        {{ __('Print Preview') }}
                     </a>
                     @if($document->deal)
                     <a href="{{ route('documents.generate', $document->deal) }}" class="btn btn-outline-secondary">

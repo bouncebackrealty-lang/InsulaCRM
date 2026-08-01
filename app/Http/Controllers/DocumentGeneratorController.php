@@ -7,15 +7,20 @@ use App\Models\Deal;
 use App\Models\DocumentTemplate;
 use App\Models\GeneratedDocument;
 use App\Services\DocumentMergeService;
+use App\Services\HeadlessPdfService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class DocumentGeneratorController extends Controller
 {
     protected DocumentMergeService $mergeService;
 
-    public function __construct(DocumentMergeService $mergeService)
+    protected HeadlessPdfService $pdfService;
+
+    public function __construct(DocumentMergeService $mergeService, HeadlessPdfService $pdfService)
     {
         $this->mergeService = $mergeService;
+        $this->pdfService = $pdfService;
     }
 
     /**
@@ -99,6 +104,8 @@ class DocumentGeneratorController extends Controller
      */
     public function show(GeneratedDocument $document)
     {
+        $this->authorizeDocument($document);
+
         $document->loadMissing(['deal', 'template', 'user']);
 
         return view('documents.show', compact('document'));
@@ -109,6 +116,8 @@ class DocumentGeneratorController extends Controller
      */
     public function print(GeneratedDocument $document)
     {
+        $this->authorizeDocument($document);
+
         $document->loadMissing(['deal.tenant']);
 
         $companyName = $document->deal?->tenant?->name
@@ -123,10 +132,41 @@ class DocumentGeneratorController extends Controller
     }
 
     /**
+     * Download a fixed US Letter PDF from the saved generated document.
+     */
+    public function downloadPdf(GeneratedDocument $document)
+    {
+        $this->authorizeDocument($document);
+
+        $document->loadMissing(['deal.tenant']);
+
+        $companyName = $document->deal?->tenant?->name
+            ?? auth()->user()->tenant->name
+            ?? '';
+
+        $html = view('documents.print', [
+            'content' => $document->content,
+            'documentName' => $document->name,
+            'companyName' => $companyName,
+            'showControls' => false,
+            'autoPrint' => false,
+        ])->render();
+
+        $filename = $this->pdfFilename($document->name);
+
+        return response($this->pdfService->render($html), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename=' . $filename,
+        ]);
+    }
+
+    /**
      * Delete a generated document.
      */
     public function destroy(GeneratedDocument $document)
     {
+        $this->authorizeDocument($document);
+
         $dealId = $document->deal_id;
         $name = $document->name;
 
@@ -136,6 +176,23 @@ class DocumentGeneratorController extends Controller
 
         return redirect()->route('documents.generate', $dealId)
             ->with('success', __('Document deleted successfully.'));
+    }
+
+    private function authorizeDocument(GeneratedDocument $document): void
+    {
+        abort_unless($document->tenant_id === auth()->user()->tenant_id, 403);
+
+        $document->loadMissing('deal');
+        abort_unless($document->deal, 404);
+
+        $this->authorize('view', $document->deal);
+    }
+
+    private function pdfFilename(string $documentName): string
+    {
+        $filename = Str::slug(Str::of($documentName)->replace('.pdf', '')->toString());
+
+        return ($filename !== '' ? $filename : 'generated-document') . '.pdf';
     }
 
     /**
