@@ -5,6 +5,7 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\BuyerController;
+use App\Http\Controllers\BuyerNotificationController;
 use App\Http\Controllers\ContractorController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DncController;
@@ -298,7 +299,8 @@ Route::middleware(['auth', 'tenant', 'require2fa'])->group(function () {
         Route::patch('/pipeline/{deal}/priority', [DealController::class, 'togglePriority'])->name('deals.togglePriority');
         Route::post('/pipeline/{deal}/documents', [DealController::class, 'uploadDocument'])->name('deals.uploadDocument');
         Route::get('/pipeline/documents/{document}/download', [DealController::class, 'downloadDocument'])->name('deals.downloadDocument');
-        Route::post('/pipeline/{deal}/notify-buyer/{match}', [DealController::class, 'notifyBuyer'])->name('deals.notifyBuyer');
+        Route::get('/pipeline/{deal}/notify-buyers', [BuyerNotificationController::class, 'create'])->name('deals.notifyBuyers.create');
+        Route::post('/pipeline/{deal}/notify-buyers', [BuyerNotificationController::class, 'store'])->name('deals.notifyBuyers.store');
 
         // Contractors attached to deals
         Route::post('/pipeline/{deal}/contractors', [DealController::class, 'attachContractor'])->name('deals.attachContractor');

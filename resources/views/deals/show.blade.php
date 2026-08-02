@@ -74,6 +74,12 @@
                         {{ __('Investor Packet') }}
                     </a>
                     @endif
+                    @can('notifyBuyer', $deal)
+                    <a href="{{ route('deals.notifyBuyers.create', $deal) }}" class="btn btn-outline-success btn-sm" title="{{ __('Notify Buyers') }}">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10 14l11 -11"/><path d="M21 3l-6.5 18l-4.5 -7l-7 -4.5z"/><path d="M10 14l5 -5"/></svg>
+                        {{ __('Notify Buyers') }}
+                    </a>
+                    @endcan
                     <a href="{{ route('pipeline') }}" class="btn btn-outline-secondary btn-sm">{{ ($businessMode ?? 'wholesale') === 'realestate' ? __('Back to Transactions') : __('Back to Pipeline') }}</a>
                 </div>
             </div>
@@ -103,6 +109,21 @@
                     <div class="datagrid-item">
                         <div class="datagrid-title">{{ __('Contract Price') }}</div>
                         <div class="datagrid-content">{{ Fmt::currency($deal->contract_price) }}</div>
+                    </div>
+                    <div class="datagrid-item">
+                        <div class="datagrid-title">{{ __('Buyer Notify') }}</div>
+                        <div class="datagrid-content">
+                            @if($deal->buyers_notified_at)
+                                <span class="badge bg-{{ $deal->buyer_notification_status === 'sent' ? 'green' : 'red' }}-lt">
+                                    {{ $deal->buyer_notification_status === 'sent' ? __('Sent') : __('Failed') }}
+                                </span>
+                                <span class="text-secondary small ms-1">{{ $deal->buyers_notified_at->diffForHumans() }}{{ $deal->buyers_notified_count ? ' (' . $deal->buyers_notified_count . ')' : '' }}</span>
+                            @elseif($deal->buyer_notification_status === 'failed')
+                                <span class="badge bg-red-lt">{{ __('Failed') }}</span>
+                            @else
+                                <span class="text-secondary">{{ __('Not sent') }}</span>
+                            @endif
+                        </div>
                     </div>
                     @if($businessMode === 'wholesale')
                     <div class="datagrid-item">
@@ -207,13 +228,9 @@
                             </td>
                             <td>
                                 <a href="{{ route('buyers.show', $match->buyer) }}" class="btn btn-sm btn-outline-primary">{{ __('View') }}</a>
-                                @if(!$match->notified_at)
-                                <form method="POST" action="{{ route('deals.notifyBuyer', [$deal, $match]) }}" class="d-inline">
-                                    @csrf
-                                    <button type="submit" class="btn btn-sm btn-outline-success">{{ __('Notify') }}</button>
-                                </form>
-                                @else
-                                <span class="badge bg-green-lt">{{ __('Notified') }} {{ $match->notified_at->diffForHumans() }}</span>
+                                <a href="{{ route('deals.notifyBuyers.create', ['deal' => $deal, 'buyer' => $match->buyer_id]) }}" class="btn btn-sm btn-outline-success">{{ __('Notify') }}</a>
+                                @if($match->notified_at)
+                                    <span class="badge bg-green-lt">{{ __('Last sent') }} {{ $match->notified_at->diffForHumans() }}</span>
                                 @endif
                             </td>
                         </tr>

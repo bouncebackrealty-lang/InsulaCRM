@@ -35,4 +35,16 @@ return [
         ],
     ],
 
+    'brevo' => [
+        'api_key' => env('BREVO_API_KEY'),
+        'transactional_template_id' => (int) env('BREVO_TRANSACTIONAL_TEMPLATE_ID', 1),
+        'sender_email' => env('BREVO_SENDER_EMAIL'),
+        'reply_to_email' => env('BREVO_REPLY_TO_EMAIL'),
+        'city_attribute' => env('BREVO_CITY_ATTRIBUTE', 'CITY'),
+        'deal_type_attribute' => env('BREVO_DEAL_TYPE_ATTRIBUTE', 'DEAL_TYPE'),
+        'test_contact_email' => env('BREVO_TEST_CONTACT_EMAIL'),
+        'test_list_name' => env('BREVO_TEST_LIST_NAME'),
+        'timeout' => (int) env('BREVO_TIMEOUT', 20),
+    ],
+
 ];

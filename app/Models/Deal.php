@@ -66,6 +66,9 @@ class Deal extends Model
         'deal_type',
         'is_priority',
         'stage_changed_at',
+        'buyers_notified_at',
+        'buyers_notified_count',
+        'buyer_notification_status',
         'contract_price',
         'assignment_fee',
         'earnest_money',
@@ -98,6 +101,8 @@ class Deal extends Model
             'brokerage_split_pct' => 'decimal:2',
             'listing_date' => 'date',
             'stage_changed_at' => 'datetime',
+            'buyers_notified_at' => 'datetime',
+            'buyers_notified_count' => 'integer',
             'is_priority' => 'boolean',
         ];
     }

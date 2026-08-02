@@ -330,18 +330,6 @@ class DealController extends Controller
         return Storage::disk('local')->download($document->path, $document->original_name);
     }
 
-    public function notifyBuyer(Deal $deal, \App\Models\DealBuyerMatch $match)
-    {
-        $this->authorize('notifyBuyer', $deal);
-
-        $match->update(['notified_at' => now()]);
-
-        event(new \App\Events\BuyerNotified($match->buyer, $deal));
-        Hooks::doAction('buyer.notified', $match->buyer, $deal);
-
-        return redirect()->back()->with('success', 'Buyer notified successfully.');
-    }
-
     public function export(Request $request)
     {
         $this->authorize('export', Deal::class);
