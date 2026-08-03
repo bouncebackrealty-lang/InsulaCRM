@@ -14,4 +14,5 @@ return [
     'browser_path' => env('PDF_BROWSER_PATH'),
 
     'browser_timeout' => (int) env('PDF_BROWSER_TIMEOUT', 60),
+    'browser_no_sandbox' => env('PDF_BROWSER_NO_SANDBOX', false),
 ];

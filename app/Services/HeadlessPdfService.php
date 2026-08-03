@@ -29,7 +29,7 @@ class HeadlessPdfService
         try {
             File::put($htmlPath, $html);
 
-            $process = new Process([
+            $command = [
                 $this->browserPath(),
                 '--headless=new',
                 '--disable-gpu',
@@ -39,7 +39,14 @@ class HeadlessPdfService
                 '--no-pdf-header-footer',
                 '--print-to-pdf=' . $pdfPath,
                 $this->fileUrl($htmlPath),
-            ]);
+            ];
+
+
+            if (config('pdf.browser_no_sandbox')) {
+                array_splice($command, 1, 0, '--no-sandbox');
+            }
+
+            $process = new Process($command);
 
             $process->setTimeout(config('pdf.browser_timeout'));
             $process->setEnv([
