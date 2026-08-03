@@ -18,7 +18,10 @@ class DocumentPdfDownloadTest extends TestCase
         $this->mock(HeadlessPdfService::class, function (MockInterface $mock) {
             $mock->shouldReceive('render')
                 ->once()
-                ->with(\Mockery::on(fn (string $html) => str_contains($html, 'PDF Download Test') && ! str_contains($html, 'Print / Save PDF')))
+                ->with(\Mockery::on(fn (string $html) => str_contains($html, 'PDF Download Test')
+                    && str_contains($html, 'margin: 0.55in')
+                    && str_contains($html, '.document-content > .document-container')
+                    && ! str_contains($html, 'Print / Save PDF')))
                 ->andReturn('%PDF-1.7 test pdf');
         });
 
