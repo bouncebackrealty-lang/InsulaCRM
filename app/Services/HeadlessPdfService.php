@@ -5,6 +5,7 @@ namespace App\Services;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use RuntimeException;
+use Symfony\Component\Process\Exception\ProcessSignaledException;
 use Symfony\Component\Process\Process;
 
 class HeadlessPdfService
@@ -18,8 +19,12 @@ class HeadlessPdfService
         $temporaryDirectory = storage_path('app/tmp/pdf-' . Str::uuid());
         $htmlPath = $temporaryDirectory . DIRECTORY_SEPARATOR . 'document.html';
         $pdfPath = $temporaryDirectory . DIRECTORY_SEPARATOR . 'document.pdf';
+        $browserHomeDirectory = $temporaryDirectory . DIRECTORY_SEPARATOR . 'browser-home';
+        $browserProfileDirectory = $temporaryDirectory . DIRECTORY_SEPARATOR . 'browser-profile';
 
-        File::ensureDirectoryExists($temporaryDirectory);
+        foreach ([$temporaryDirectory, $browserHomeDirectory, $browserProfileDirectory] as $directory) {
+            File::ensureDirectoryExists($directory);
+        }
 
         try {
             File::put($htmlPath, $html);
@@ -28,7 +33,7 @@ class HeadlessPdfService
                 $this->browserPath(),
                 '--headless=new',
                 '--disable-gpu',
-                '--user-data-dir=' . $temporaryDirectory . DIRECTORY_SEPARATOR . 'browser-profile',
+                '--user-data-dir=' . $browserProfileDirectory,
                 '--no-first-run',
                 '--no-default-browser-check',
                 '--no-pdf-header-footer',
@@ -37,7 +42,25 @@ class HeadlessPdfService
             ]);
 
             $process->setTimeout(config('pdf.browser_timeout'));
-            $process->run();
+            $process->setEnv([
+                // PHP-FPM can run without a usable HOME directory. Modern Chrome
+                // aborts its Crashpad handler in that case, so keep all browser
+                // state inside this request's temporary directory.
+                'HOME' => $browserHomeDirectory,
+                'XDG_CONFIG_HOME' => $browserHomeDirectory . DIRECTORY_SEPARATOR . 'config',
+                'XDG_CACHE_HOME' => $browserHomeDirectory . DIRECTORY_SEPARATOR . 'cache',
+            ]);
+
+            try {
+                $process->run();
+            } catch (ProcessSignaledException $exception) {
+                $errorOutput = trim($process->getErrorOutput());
+
+                throw new RuntimeException(
+                    'The PDF renderer stopped unexpectedly.' . ($errorOutput !== '' ? ' ' . $errorOutput : ''),
+                    previous: $exception,
+                );
+            }
 
             if (! $process->isSuccessful()) {
                 throw new RuntimeException('The PDF renderer could not generate the document. ' . trim($process->getErrorOutput()));
