@@ -9,6 +9,10 @@
 @endsection
 
 @section('content')
+@php
+    $isWholesaleDeal = ($businessMode ?? 'wholesale') === 'wholesale' && $deal->deal_type === 'wholesale';
+    $directEntryValue = static fn ($value) => in_array((float) $value, [0.0, 0.01], true) ? '' : $value;
+@endphp
 <div class="row">
     <div class="col-md-8">
         <!-- AI Briefing (auto-loads) -->
@@ -126,10 +130,12 @@
                         </div>
                     </div>
                     @if($businessMode === 'wholesale')
+                    @if($isWholesaleDeal)
                     <div class="datagrid-item">
                         <div class="datagrid-title">{{ __('Assignment Fee') }}</div>
                         <div class="datagrid-content">{{ Fmt::currency($deal->assignment_fee) }}</div>
                     </div>
+                    @endif
                     <div class="datagrid-item">
                         <div class="datagrid-title">{{ __('Earnest Money') }}</div>
                         <div class="datagrid-content">{{ Fmt::currency($deal->earnest_money) }}</div>
@@ -675,10 +681,19 @@
                 @if($deal->documents->count())
                 <div class="list-group list-group-flush">
                     @foreach($deal->documents as $doc)
-                    <a href="{{ route('deals.downloadDocument', $doc) }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                        {{ $doc->original_name }}
-                        <small class="text-secondary">{{ number_format($doc->size / 1024, 1) }} KB</small>
-                    </a>
+                    <div class="list-group-item d-flex justify-content-between align-items-center gap-2">
+                        <a href="{{ route('deals.downloadDocument', $doc) }}" class="text-reset text-decoration-none text-truncate">
+                            {{ $doc->original_name }}
+                        </a>
+                        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                            <small class="text-secondary">{{ number_format($doc->size / 1024, 1) }} KB</small>
+                            <form action="{{ route('deals.destroyDocument', [$deal, $doc]) }}" method="POST" onsubmit="return confirm('{{ __('Delete this uploaded document?') }}')">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="btn btn-sm btn-outline-danger">{{ __('Delete') }}</button>
+                            </form>
+                        </div>
+                    </div>
                     @endforeach
                 </div>
                 @else
@@ -921,16 +936,18 @@
                     </div>
                     <div class="mb-2">
                         <label class="form-label">{{ __('Contract Price ($)') }}</label>
-                        <input type="number" name="contract_price" class="form-control form-control-sm" step="0.01" value="{{ $deal->contract_price }}">
+                        <input type="number" name="contract_price" id="deal-contract-price" class="form-control form-control-sm" step="0.01" min="0" value="{{ $directEntryValue($deal->contract_price) }}">
                     </div>
                     @if($businessMode === 'wholesale')
+                    @if($isWholesaleDeal)
                     <div class="mb-2">
                         <label class="form-label">{{ __('Assignment Fee ($)') }}</label>
-                        <input type="number" name="assignment_fee" class="form-control form-control-sm" step="0.01" value="{{ $deal->assignment_fee }}">
+                        <input type="number" name="assignment_fee" class="form-control form-control-sm" step="0.01" min="0" value="{{ $directEntryValue($deal->assignment_fee) }}">
                     </div>
+                    @endif
                     <div class="mb-2">
                         <label class="form-label">{{ __('Earnest Money ($)') }}</label>
-                        <input type="number" name="earnest_money" class="form-control form-control-sm" step="0.01" value="{{ $deal->earnest_money }}">
+                        <input type="number" name="earnest_money" id="deal-earnest-money" class="form-control form-control-sm" step="0.01" min="0" value="{{ $deal->earnest_money }}">
                     </div>
                     <div class="mb-2">
                         <label class="form-label">{{ __('Inspection Period (days)') }}</label>
@@ -1046,6 +1063,27 @@ document.getElementById('deal-edit-form').addEventListener('submit', function(e)
         if (data.success) location.reload();
     });
 });
+
+(function () {
+    const contractPrice = document.getElementById('deal-contract-price');
+    const earnestMoney = document.getElementById('deal-earnest-money');
+    if (!contractPrice || !earnestMoney) return;
+
+    let manuallyEdited = false;
+    const setDefaultEarnestMoney = function () {
+        const amount = parseFloat(contractPrice.value);
+        if (!Number.isFinite(amount)) return;
+        earnestMoney.value = (amount * 0.01).toFixed(2);
+    };
+
+    earnestMoney.addEventListener('input', function () {
+        manuallyEdited = true;
+    });
+    contractPrice.addEventListener('input', function () {
+        if (!manuallyEdited) setDefaultEarnestMoney();
+    });
+    if (!earnestMoney.value && contractPrice.value) setDefaultEarnestMoney();
+})();
 
 // Track recently viewed
 if (window.trackRecentlyViewed) {

@@ -98,6 +98,7 @@ class DocumentTemplate extends Model
             ],
             __('Property') => [
                 'property.address' => __('Property Address'),
+                'property.parcel_id' => __('Parcel ID / Legal Description'),
                 'property.city' => __('City'),
                 'property.state' => __('State'),
                 'property.zip_code' => __('Zip Code'),

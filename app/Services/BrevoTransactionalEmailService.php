@@ -137,8 +137,11 @@ class BrevoTransactionalEmailService
 
         $deal->loadMissing(['tenant', 'lead.property', 'lead.photos']);
 
+        $propertyAddress = $deal->lead?->property?->full_address ?: $deal->title;
+
         $response = $this->post('/smtp/email', [
             'templateId' => config('services.brevo.transactional_template_id'),
+            'subject' => 'New Deal Alert - ' . $propertyAddress,
             'sender' => [
                 'email' => config('services.brevo.sender_email'),
                 'name' => $deal->tenant?->name,
@@ -221,6 +224,12 @@ class BrevoTransactionalEmailService
             'CLOSING_DATE' => $deal->closing_date?->format('m/d/Y'),
             'PROPERTY_PHOTO_URL' => $photoUrl,
             'PHOTO_URL' => $photoUrl,
+            'property_address' => $property?->address,
+            'property_city' => $property?->city,
+            'property_state' => $property?->state,
+            'property_zip' => $property?->zip_code,
+            'property_full_address' => $property?->full_address,
+            'property_photo_url' => $photoUrl,
         ];
     }
 

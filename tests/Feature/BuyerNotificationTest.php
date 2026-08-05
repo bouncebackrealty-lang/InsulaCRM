@@ -54,6 +54,41 @@ class BuyerNotificationTest extends TestCase
         $response->assertSee('Transactional template');
     }
 
+    public function test_notify_page_refreshes_crm_matches_when_a_buyer_already_matches_the_deal_criteria(): void
+    {
+        $this->actingAsAdmin();
+        $deal = $this->createDeal([
+            'deal_type' => 'fix_and_flip',
+            'contract_price' => 185000,
+        ]);
+        $property = $this->createProperty([
+            'lead_id' => $deal->lead_id,
+            'city' => 'Atlanta',
+            'state' => 'GA',
+            'zip_code' => '30318',
+            'property_type' => 'single_family',
+        ]);
+        $buyer = Buyer::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'email' => 'criteria-match@example.com',
+            'max_purchase_price' => 200000,
+            'preferred_zip_codes' => [$property->zip_code],
+            'preferred_property_types' => [$property->property_type],
+            'preferred_states' => [$property->state],
+        ]);
+
+        $response = $this->get(route('deals.notifyBuyers.create', $deal));
+
+        $response->assertOk();
+        $response->assertSee('1 buyer(s) with an email address');
+        $response->assertSee('criteria-match@example.com');
+        $response->assertSee('CRM-matched recipients');
+        $this->assertDatabaseHas('deal_buyer_matches', [
+            'deal_id' => $deal->id,
+            'buyer_id' => $buyer->id,
+        ]);
+    }
+
     public function test_manual_notification_sends_selected_live_crm_buyers_and_records_status(): void
     {
         $this->actingAsAdmin();

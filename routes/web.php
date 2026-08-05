@@ -299,6 +299,7 @@ Route::middleware(['auth', 'tenant', 'require2fa'])->group(function () {
         Route::patch('/pipeline/{deal}/priority', [DealController::class, 'togglePriority'])->name('deals.togglePriority');
         Route::post('/pipeline/{deal}/documents', [DealController::class, 'uploadDocument'])->name('deals.uploadDocument');
         Route::get('/pipeline/documents/{document}/download', [DealController::class, 'downloadDocument'])->name('deals.downloadDocument');
+        Route::delete('/pipeline/{deal}/documents/{document}', [DealController::class, 'destroyDocument'])->name('deals.destroyDocument');
         Route::get('/pipeline/{deal}/notify-buyers', [BuyerNotificationController::class, 'create'])->name('deals.notifyBuyers.create');
         Route::post('/pipeline/{deal}/notify-buyers', [BuyerNotificationController::class, 'store'])->name('deals.notifyBuyers.store');
 

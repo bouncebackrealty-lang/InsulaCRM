@@ -82,6 +82,7 @@ class DealManagementTest extends TestCase
             'after_repair_value' => 200000,
             'repair_estimate' => 20000,
             'our_offer' => 90000,
+            'deal_type' => 'wholesale',
         ]);
 
         $response = $this->post("/leads/{$lead->id}/deals");
@@ -503,6 +504,49 @@ class DealManagementTest extends TestCase
         $this->assertSame($this->tenant->id, $document->tenant_id);
         $this->assertSame('purchase-contract.pdf', $document->original_name);
         Storage::disk('local')->assertExists($document->path);
+    }
+
+    public function test_admin_can_delete_an_uploaded_deal_document(): void
+    {
+        Storage::fake('local');
+        $this->actingAsAdmin();
+        $deal = $this->createDeal();
+        $document = DealDocument::create([
+            'tenant_id' => $this->tenant->id,
+            'deal_id' => $deal->id,
+            'filename' => 'inspection.pdf',
+            'original_name' => 'Inspection.pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 100,
+            'path' => "deals/{$deal->id}/inspection.pdf",
+        ]);
+        Storage::disk('local')->put($document->path, 'test document');
+
+        $response = $this->delete(route('deals.destroyDocument', [$deal, $document]));
+
+        $response->assertRedirect(route('deals.show', $deal));
+        $this->assertDatabaseMissing('deal_documents', ['id' => $document->id]);
+        Storage::disk('local')->assertMissing($document->path);
+    }
+
+    public function test_assignment_fee_is_hidden_and_cleared_for_a_fix_and_flip_deal(): void
+    {
+        $this->actingAsAdmin();
+        $deal = $this->createDeal([
+            'deal_type' => 'fix_and_flip',
+            'assignment_fee' => 12500,
+        ]);
+
+        $this->get(route('deals.show', $deal))
+            ->assertOk()
+            ->assertDontSee('Assignment Fee');
+
+        $this->putJson(route('deals.update', $deal), [
+            'deal_type' => 'fix_and_flip',
+            'contract_price' => 180000,
+        ])->assertOk();
+
+        $this->assertNull($deal->fresh()->assignment_fee);
     }
 
     public function test_closed_won_preserves_documents_buyer_matches_and_activity_history(): void

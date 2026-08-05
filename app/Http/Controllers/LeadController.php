@@ -289,8 +289,14 @@ class LeadController extends Controller
             if ($isWholesale) {
                 $data['contract_price'] = $property->our_offer ?: $property->asking_price ?: $property->estimated_value;
 
-                if ($property->our_offer && $property->mao !== null) {
+
+                if ($property->deal_type === 'wholesale' && $property->our_offer && $property->mao !== null) {
                     $data['assignment_fee'] = max((float) $property->mao - (float) $property->our_offer, 0);
+                }
+
+
+                if ($data['contract_price'] !== null) {
+                    $data['earnest_money'] = round((float) $data['contract_price'] * 0.01, 2);
                 }
             }
 

@@ -25,6 +25,7 @@ class PropertyRequest extends FormRequest
             'city' => 'required|string|max:255',
             'state' => 'required|string|max:2',
             'zip_code' => 'required|string|max:10',
+            'parcel_id' => 'nullable|string|max:255',
             'property_type' => "required|in:{$propertyTypes}",
             'deal_type' => 'nullable|string|in:' . implode(',', array_keys(Deal::dealTypes())),
             'bedrooms' => 'nullable|integer|min:0',

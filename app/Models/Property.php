@@ -18,6 +18,7 @@ class Property extends Model
         'city',
         'state',
         'zip_code',
+        'parcel_id',
         'property_type',
         'deal_type',
         'bedrooms',

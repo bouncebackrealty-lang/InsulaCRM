@@ -133,6 +133,7 @@ class LeadManagementTest extends TestCase
             'city' => 'Atlanta',
             'state' => 'GA',
             'zip_code' => '30318',
+            'parcel_id' => 'ATL-30318-4521',
             'property_type' => 'single_family',
             'deal_type' => 'fix_and_flip',
             'condition' => 'fair',
@@ -146,6 +147,7 @@ class LeadManagementTest extends TestCase
         $this->assertDatabaseHas('properties', [
             'lead_id' => $lead->id,
             'deal_type' => 'fix_and_flip',
+            'parcel_id' => 'ATL-30318-4521',
         ]);
 
         $this->post("/leads/{$lead->id}/deals");
@@ -153,6 +155,11 @@ class LeadManagementTest extends TestCase
         $this->assertDatabaseHas('deals', [
             'lead_id' => $lead->id,
             'deal_type' => 'fix_and_flip',
+        ]);
+        $this->assertDatabaseHas('deals', [
+            'lead_id' => $lead->id,
+            'earnest_money' => 1750,
+            'assignment_fee' => null,
         ]);
     }
 

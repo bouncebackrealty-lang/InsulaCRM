@@ -97,6 +97,8 @@ document.addEventListener('DOMContentLoaded', function() {
     var submitBtn = document.getElementById('photo-upload-submit');
     var batchSize = 20;
 
+    var maxBatchBytes = 4 * 1024 * 1024;
+
     // Click to browse
     dropZone.addEventListener('click', function() { fileInput.click(); });
 
@@ -156,7 +158,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     form.addEventListener('submit', function(e) {
         var files = Array.prototype.slice.call(fileInput.files || []);
-        if (files.length <= batchSize || !window.fetch) {
+        if (files.length <= 1 || !window.fetch) {
             return;
         }
 
@@ -183,17 +185,36 @@ document.addEventListener('DOMContentLoaded', function() {
         var token = form.querySelector('input[name="_token"]').value;
         var total = files.length;
         var uploaded = 0;
+        var batches = [];
+        var batch = [];
+        var batchBytes = 0;
+
+        files.forEach(function(file, index) {
+
+            if (batch.length && (batch.length >= batchSize || batchBytes + file.size > maxBatchBytes)) {
+                batches.push(batch);
+                batch = [];
+                batchBytes = 0;
+            }
+
+            batch.push({ file: file, index: index });
+            batchBytes += file.size;
+        });
+
+        if (batch.length) {
+            batches.push(batch);
+        }
 
         setUploadingState(true, '{{ __('Uploading photos...') }}');
 
-        function sendNextBatch(start) {
-            var batch = files.slice(start, start + batchSize);
+        function sendNextBatch(batchIndex) {
+            var currentBatch = batches[batchIndex];
             var payload = new FormData();
             payload.append('_token', token);
 
-            batch.forEach(function(file, offset) {
-                payload.append('photos[]', file);
-                payload.append('captions[]', captionFor(start + offset));
+            currentBatch.forEach(function(item) {
+                payload.append('photos[]', item.file);
+                payload.append('captions[]', captionFor(item.index));
             });
 
             return fetch(form.action, {
@@ -207,11 +228,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     throw new Error('Upload failed');
                 }
 
-                uploaded += batch.length;
+                uploaded += currentBatch.length;
                 setUploadingState(true, uploaded + ' / ' + total + ' {{ __('uploaded') }}');
 
                 if (uploaded < total) {
-                    return sendNextBatch(uploaded);
+                    return sendNextBatch(batchIndex + 1);
                 }
 
                 window.location.reload();

@@ -66,6 +66,24 @@
                             </span>
                         </label>
 
+                        @if($matchedBuyers->isNotEmpty())
+                            <div class="border rounded p-3 ms-md-4" id="matched-buyer-panel" data-testid="matched-buyer-panel" {{ $selectedTarget === 'matched' ? '' : 'hidden' }}>
+                                <div class="fw-bold mb-2">{{ __('CRM-matched recipients') }}</div>
+                                <div class="list-group list-group-flush border rounded">
+                                    @foreach($matchedBuyers as $match)
+                                        <div class="list-group-item d-flex justify-content-between align-items-center gap-2">
+                                            <span>
+                                                <span class="fw-medium">{{ $match->buyer->company ?: $match->buyer->full_name }}</span>
+                                                <span class="d-block small text-secondary">{{ $match->buyer->email }}</span>
+                                            </span>
+                                            <span class="badge bg-azure-lt text-azure">{{ __('Matched') }}</span>
+                                        </div>
+                                    @endforeach
+                                </div>
+                                <div class="small text-secondary mt-2">{{ __('All listed matching buyers will receive the notification when this option is selected.') }}</div>
+                            </div>
+                        @endif
+
                         <label class="form-selectgroup-item flex-fill">
                             <input type="radio" name="recipient_target" value="manual" class="form-selectgroup-input" {{ $selectedTarget === 'manual' ? 'checked' : '' }}>
                             <span class="form-selectgroup-label d-flex align-items-center p-3">
@@ -77,7 +95,7 @@
                             </span>
                         </label>
 
-                        <div class="border rounded p-3 ms-md-4" id="manual-buyer-panel">
+                        <div class="border rounded p-3 ms-md-4" id="manual-buyer-panel" {{ $selectedTarget === 'manual' ? '' : 'hidden' }}>
                             <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
                                 <span class="fw-bold">{{ __('CRM buyers') }}</span>
                                 <button type="button" class="btn btn-sm btn-outline-primary" id="select-all-buyers">{{ __('Select All') }}</button>
@@ -157,15 +175,49 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const manualTarget = document.querySelector('input[name="recipient_target"][value="manual"]');
+    const matchedTarget = document.querySelector('input[name="recipient_target"][value="matched"]');
+    const recipientTargets = Array.from(document.querySelectorAll('input[name="recipient_target"]'));
+    const manualPanel = document.getElementById('manual-buyer-panel');
+    const matchedPanel = document.getElementById('matched-buyer-panel');
     const selectAllButton = document.getElementById('select-all-buyers');
     const checkboxes = Array.from(document.querySelectorAll('.buyer-selection:not(:disabled)'));
 
+    const updateManualSelectionState = function () {
+        const isManual = manualTarget?.checked === true;
+        const isMatched = matchedTarget?.checked === true;
+        if (manualPanel) {
+            manualPanel.hidden = !isManual;
+            manualPanel.setAttribute('aria-hidden', isManual ? 'false' : 'true');
+        }
+        if (matchedPanel) {
+            matchedPanel.hidden = !isMatched;
+            matchedPanel.setAttribute('aria-hidden', isMatched ? 'false' : 'true');
+        }
+        checkboxes.forEach(function (checkbox) {
+            checkbox.disabled = !isManual;
+        });
+        if (selectAllButton) {
+            const allSelected = checkboxes.length > 0 && checkboxes.every(function (checkbox) { return checkbox.checked; });
+            selectAllButton.textContent = allSelected ? '{{ __('Deselect All') }}' : '{{ __('Select All') }}';
+        }
+    };
+
+    recipientTargets.forEach(function (target) {
+        target.addEventListener('change', updateManualSelectionState);
+    });
+
     selectAllButton?.addEventListener('click', function () {
         manualTarget.checked = true;
+        manualTarget.dispatchEvent(new Event('change'));
         const select = checkboxes.some(function (checkbox) { return !checkbox.checked; });
         checkboxes.forEach(function (checkbox) { checkbox.checked = select; });
-        selectAllButton.textContent = select ? '{{ __('Deselect All') }}' : '{{ __('Select All') }}';
+        updateManualSelectionState();
     });
+
+    checkboxes.forEach(function (checkbox) {
+        checkbox.addEventListener('change', updateManualSelectionState);
+    });
+    updateManualSelectionState();
 });
 </script>
 @endpush

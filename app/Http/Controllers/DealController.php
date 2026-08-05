@@ -286,7 +286,14 @@ class DealController extends Controller
     {
         $this->authorize('update', $deal);
 
-        $deal->update($request->validated());
+        $data = $request->validated();
+
+        $effectiveDealType = $data['deal_type'] ?? $deal->deal_type;
+        if ($effectiveDealType !== 'wholesale') {
+            $data['assignment_fee'] = null;
+        }
+
+        $deal->update($data);
 
         // Recalculate due_diligence_end_date if relevant fields changed
         if ($deal->contract_date && $deal->inspection_period_days > 0 && $deal->stage === 'under_contract') {
@@ -328,6 +335,25 @@ class DealController extends Controller
         $this->authorize('view', $deal);
 
         return Storage::disk('local')->download($document->path, $document->original_name);
+    }
+
+
+    public function destroyDocument(Deal $deal, DealDocument $document)
+    {
+        $this->authorize('uploadDocument', $deal);
+
+        abort_unless(
+            $document->deal_id === $deal->id && $document->tenant_id === $deal->tenant_id,
+            404
+        );
+
+        Storage::disk('local')->delete($document->path);
+        $document->delete();
+
+        AuditLog::log('deal.document_deleted', $deal, null, ['name' => $document->original_name]);
+
+        return redirect()->route('deals.show', $deal)
+            ->with('success', 'Document deleted successfully.');
     }
 
     public function export(Request $request)

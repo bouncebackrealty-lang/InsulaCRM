@@ -99,6 +99,7 @@ class DocumentMergeService
 
         // Property fields
         $data['property.address'] = $property->address ?? '';
+        $data['property.parcel_id'] = $property->parcel_id ?? '';
         $data['property.city'] = $property->city ?? '';
         $data['property.state'] = $property->state ?? '';
         $data['property.zip_code'] = $property->zip_code ?? '';

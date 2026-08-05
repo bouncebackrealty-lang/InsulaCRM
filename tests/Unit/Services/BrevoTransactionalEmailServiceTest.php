@@ -104,6 +104,7 @@ class BrevoTransactionalEmailServiceTest extends TestCase
             return $request->url() === 'https://api.brevo.com/v3/smtp/email'
                 && $request->hasHeader('api-key', 'test-api-key')
                 && $data['templateId'] === 1
+                && $data['subject'] === 'New Deal Alert - 4521 Mill Creek Road, Atlanta, GA 30318'
                 && $data['sender']['email'] === 'bouncebackrealty@gmail.com'
                 && $data['replyTo']['email'] === 'bouncebackrealty@gmail.com'
                 && $data['to'] === [['email' => 'buyer@example.com', 'name' => 'Buyer One']]
@@ -115,6 +116,8 @@ class BrevoTransactionalEmailServiceTest extends TestCase
                 && $data['params']['repair_level'] === 'Fair'
                 && $data['params']['deal_type'] === 'Wholesale'
                 && $data['params']['photo_url'] === url('storage/lead-photos/' . $this->getDealLeadId() . '/property.jpg')
+                && $data['params']['property_full_address'] === '4521 Mill Creek Road, Atlanta, GA 30318'
+                && $data['params']['property_photo_url'] === url('storage/lead-photos/' . $this->getDealLeadId() . '/property.jpg')
                 && $data['params']['DEAL_TYPE'] === 'Wholesale'
                 && $data['params']['CONTRACT_PRICE'] === '$185,000.00'
                 && $data['params']['ARV'] === '$275,000.00'

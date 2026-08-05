@@ -1,3 +1,8 @@
+@php
+    $directEntryValue = static function ($value) {
+        return in_array((float) $value, [0.0, 0.01], true) ? '' : $value;
+    };
+@endphp
 <div class="card mb-3" id="property-section">
     <div class="card-header">
         <h3 class="card-title">{{ __('Property Details') }}</h3>
@@ -106,6 +111,12 @@
                 </div>
             </div>
             <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">{{ __('Parcel ID / Legal Description') }}</label>
+                    <input type="text" name="parcel_id" class="form-control" value="{{ old('parcel_id', $lead->property->parcel_id ?? '') }}">
+                </div>
+            </div>
+            <div class="row mb-3">
                 <div class="col-md-2">
                     <label class="form-label required">{{ __('Property Type') }}</label>
                     <select name="property_type" class="form-select" required>
@@ -152,18 +163,30 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">{{ Fmt::lotSizeLabel() }}</label>
-                    <input type="number" name="lot_size" class="form-control" step="0.01" min="0" value="{{ old('lot_size', $lead->property->lot_size ?? '') }}">
+                    <input type="number" name="lot_size" class="form-control" step="0.01" min="0" value="{{ old('lot_size', $directEntryValue($lead->property->lot_size ?? null)) }}">
                 </div>
                 @if(($businessMode ?? 'wholesale') === 'wholesale')
                 <div class="col-md-4">
                     <label class="form-label">{{ __('Distress Markers') }}</label>
                     @php $currentMarkers = old('distress_markers', $lead->property->distress_markers ?? []); @endphp
-                    <select name="distress_markers[]" class="form-select" multiple size="5">
-                        @foreach(\App\Services\CustomFieldService::getOptions('distress_markers') as $val => $label)
-                            <option value="{{ $val }}" {{ is_array($currentMarkers) && in_array($val, $currentMarkers) ? 'selected' : '' }}>{{ $label }}</option>
-                        @endforeach
-                    </select>
-                    <small class="text-secondary">{{ __('Hold Ctrl/Cmd to select multiple') }}</small>
+                    <div class="dropdown" id="distress-markers-picker">
+                        <button class="btn btn-outline-secondary w-100 text-start d-flex justify-content-between align-items-center" type="button" id="distress-markers-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                            <span id="distress-markers-label">{{ __('Select distress markers') }}</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-sm" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="m6 9 6 6 6-6"/></svg>
+                        </button>
+                        <div class="dropdown-menu w-100 p-1" aria-labelledby="distress-markers-toggle">
+                            @foreach(\App\Services\CustomFieldService::getOptions('distress_markers') as $val => $label)
+                                <button type="button" class="dropdown-item distress-marker-option" data-value="{{ $val }}" data-label="{{ $label }}">
+                                    <span class="form-check m-0">
+                                        <input class="form-check-input distress-marker-checkbox" type="checkbox" value="{{ $val }}" style="pointer-events:none" {{ is_array($currentMarkers) && in_array($val, $currentMarkers) ? 'checked' : '' }}>
+                                        <span class="form-check-label">{{ $label }}</span>
+                                    </span>
+                                </button>
+                            @endforeach
+                        </div>
+                    </div>
+                    <div id="distress-markers-inputs"></div>
+                    <small class="text-secondary">{{ __('Select one marker at a time; the menu closes after each selection.') }}</small>
                 </div>
                 @endif
             </div>
@@ -171,15 +194,15 @@
             <div class="row mb-3">
                 <div class="col-md-3">
                     <label class="form-label">{{ __('Estimated Value') }} ({{ Fmt::currencySymbol() }})</label>
-                    <input type="number" name="estimated_value" class="form-control" step="0.01" min="0" value="{{ old('estimated_value', $lead->property->estimated_value ?? '') }}">
+                    <input type="number" name="estimated_value" class="form-control" step="0.01" min="0" value="{{ old('estimated_value', $directEntryValue($lead->property->estimated_value ?? null)) }}">
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">{{ __('After Repair Value') }} ({{ Fmt::currencySymbol() }})</label>
-                    <input type="number" name="after_repair_value" id="after_repair_value" class="form-control calc-field" step="0.01" min="0" value="{{ old('after_repair_value', $lead->property->after_repair_value ?? '') }}">
+                    <input type="number" name="after_repair_value" id="after_repair_value" class="form-control calc-field" step="0.01" min="0" value="{{ old('after_repair_value', $directEntryValue($lead->property->after_repair_value ?? null)) }}">
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">{{ __('Repair Estimate') }} ({{ Fmt::currencySymbol() }})</label>
-                    <input type="number" name="repair_estimate" id="repair_estimate" class="form-control calc-field" step="0.01" min="0" value="{{ old('repair_estimate', $lead->property->repair_estimate ?? '') }}">
+                    <input type="number" name="repair_estimate" id="repair_estimate" class="form-control calc-field" step="0.01" min="0" value="{{ old('repair_estimate', $directEntryValue($lead->property->repair_estimate ?? null)) }}">
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">{{ __('MAO Percentage') }}</label>
@@ -201,13 +224,13 @@
             <div class="row mb-3">
                 <div class="col-md-4">
                     <label class="form-label">{{ __('Asking Price') }} ({{ Fmt::currencySymbol() }})</label>
-                    <input type="number" name="asking_price" class="form-control" step="0.01" min="0" value="{{ old('asking_price', $lead->property->asking_price ?? '') }}">
+                    <input type="number" name="asking_price" class="form-control" step="0.01" min="0" value="{{ old('asking_price', $directEntryValue($lead->property->asking_price ?? null)) }}">
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">{{ __('Our Offer') }} ({{ Fmt::currencySymbol() }})</label>
-                    <input type="number" name="our_offer" id="our_offer" class="form-control calc-field" step="0.01" min="0" value="{{ old('our_offer', $lead->property->our_offer ?? '') }}">
+                    <input type="number" name="our_offer" id="our_offer" class="form-control calc-field" step="0.01" min="0" value="{{ old('our_offer', $directEntryValue($lead->property->our_offer ?? null)) }}">
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-4" id="assignment-fee-field" {{ old('deal_type', $lead->property->deal_type ?? '') === 'wholesale' ? '' : 'hidden' }}>
                     <label class="form-label">{{ __('Assignment Fee') }}</label>
                     <div class="form-control-plaintext">
                         <strong id="assignment-fee" class="h4">$0.00</strong>
@@ -218,7 +241,7 @@
             <div class="row mb-3">
                 <div class="col-md-4">
                     <label class="form-label">{{ __('List Price') }} ({{ Fmt::currencySymbol() }})</label>
-                    <input type="number" name="list_price" class="form-control" step="0.01" min="0" value="{{ old('list_price', $lead->property->list_price ?? '') }}">
+                    <input type="number" name="list_price" class="form-control" step="0.01" min="0" value="{{ old('list_price', $directEntryValue($lead->property->list_price ?? null)) }}">
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">{{ __('Listing Status') }}</label>
@@ -231,7 +254,7 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">{{ __('Asking Price') }} ({{ Fmt::currencySymbol() }})</label>
-                    <input type="number" name="asking_price" class="form-control" step="0.01" min="0" value="{{ old('asking_price', $lead->property->asking_price ?? '') }}">
+                    <input type="number" name="asking_price" class="form-control" step="0.01" min="0" value="{{ old('asking_price', $directEntryValue($lead->property->asking_price ?? null)) }}">
                 </div>
             </div>
             @endif
@@ -267,6 +290,16 @@ function calculateMAO() {
 }
 
 function calculateAssignmentFee() {
+    const dealType = document.querySelector('[name="deal_type"]')?.value;
+    const feeField = document.getElementById('assignment-fee-field');
+    if (feeField) {
+        feeField.hidden = dealType !== 'wholesale';
+    }
+
+    if (dealType !== 'wholesale') {
+        return;
+    }
+
     const ourOffer = parseFloat(document.getElementById('our_offer').value) || 0;
     const arv = parseFloat(document.getElementById('after_repair_value').value) || 0;
     const repair = parseFloat(document.getElementById('repair_estimate').value) || 0;
@@ -290,6 +323,38 @@ document.querySelectorAll('.calc-field').forEach(function(input) {
         calculateAssignmentFee();
     });
 });
+
+document.querySelector('[name="deal_type"]')?.addEventListener('change', calculateAssignmentFee);
+
+(function initialiseDistressMarkerPicker() {
+    const picker = document.getElementById('distress-markers-picker');
+    const inputs = document.getElementById('distress-markers-inputs');
+    const label = document.getElementById('distress-markers-label');
+    const toggle = document.getElementById('distress-markers-toggle');
+    if (!picker || !inputs || !label || !toggle) return;
+
+    const update = function () {
+        const selected = Array.from(picker.querySelectorAll('.distress-marker-checkbox:checked'));
+        inputs.innerHTML = selected.map(function (checkbox) {
+            return '<input type="hidden" name="distress_markers[]" value="' + checkbox.value + '">';
+        }).join('');
+        label.textContent = selected.length
+            ? selected.map(function (checkbox) { return checkbox.closest('.distress-marker-option').dataset.label; }).join(', ')
+            : '{{ __('Select distress markers') }}';
+    };
+
+    picker.querySelectorAll('.distress-marker-option').forEach(function (option) {
+        option.addEventListener('click', function (event) {
+            event.preventDefault();
+            const checkbox = option.querySelector('.distress-marker-checkbox');
+            checkbox.checked = !checkbox.checked;
+            update();
+            bootstrap.Dropdown.getOrCreateInstance(toggle).hide();
+        });
+    });
+
+    update();
+})();
 
 calculateMAO();
 calculateAssignmentFee();

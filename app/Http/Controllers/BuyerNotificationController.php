@@ -6,6 +6,7 @@ use App\Models\Activity;
 use App\Models\AuditLog;
 use App\Models\Buyer;
 use App\Models\Deal;
+use App\Services\BuyerMatchService;
 use App\Services\BrevoTransactionalEmailService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,6 +20,8 @@ class BuyerNotificationController extends Controller
     public function create(Request $request, Deal $deal)
     {
         $this->authorize('notifyBuyer', $deal);
+
+        app(BuyerMatchService::class)->matchForDeal($deal);
 
         $deal->load([
             'lead.property',
@@ -117,6 +120,8 @@ class BuyerNotificationController extends Controller
      */
     private function matchedRecipients(Deal $deal): array
     {
+        app(BuyerMatchService::class)->matchForDeal($deal);
+
         $matches = $deal->buyerMatches()
             ->with('buyer')
             ->get()
