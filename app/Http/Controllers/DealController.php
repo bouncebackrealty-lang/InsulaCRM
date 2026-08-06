@@ -152,9 +152,14 @@ class DealController extends Controller
             'stage_changed_at' => now(),
         ];
 
-        // Auto-calculate due_diligence_end_date when moving to under_contract
-        if ($request->stage === 'under_contract' && $deal->contract_date && $deal->inspection_period_days > 0) {
-            $updateData['due_diligence_end_date'] = $deal->contract_date->copy()->addDays($deal->inspection_period_days);
+
+        if ($request->stage === 'under_contract' && ! \App\Services\BusinessModeService::isRealEstate()) {
+            $contractDate = $deal->contract_date ?: now()->startOfDay();
+            $inspectionDays = $deal->inspection_period_days ?: 10;
+
+            $updateData['contract_date'] = $contractDate;
+            $updateData['inspection_period_days'] = $inspectionDays;
+            $updateData['due_diligence_end_date'] = $this->addBusinessDays($contractDate, $inspectionDays);
         }
 
         $deal->update($updateData);
@@ -298,7 +303,7 @@ class DealController extends Controller
         // Recalculate due_diligence_end_date if relevant fields changed
         if ($deal->contract_date && $deal->inspection_period_days > 0 && $deal->stage === 'under_contract') {
             $deal->update([
-                'due_diligence_end_date' => $deal->contract_date->copy()->addDays($deal->inspection_period_days),
+                'due_diligence_end_date' => $this->addBusinessDays($deal->contract_date, $deal->inspection_period_days),
             ]);
         }
 
@@ -719,6 +724,22 @@ class DealController extends Controller
         $rehabLineItem->delete();
 
         return redirect()->back()->with('success', __('Rehab line item removed.'));
+    }
+
+    private function addBusinessDays($startDate, int $days)
+    {
+        $date = $startDate->copy()->startOfDay();
+        $added = 0;
+
+        while ($added < $days) {
+            $date->addDay();
+
+            if (! $date->isWeekend()) {
+                $added++;
+            }
+        }
+
+        return $date;
     }
 
     private function validateRehabLineItem(Request $request): array

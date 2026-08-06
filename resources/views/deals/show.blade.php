@@ -492,6 +492,7 @@
                 $rehabPaidTotal = $deal->rehabLineItems->sum(fn ($item) => (float) $item->amount_paid);
                 $rehabRemainingTotal = $rehabBudgetTotal - $rehabPaidTotal;
                 $rehabCategories = \App\Services\CustomFieldService::getOptions('rehab_category');
+                $rehabDirectEntryValue = static fn ($value) => in_array((float) $value, [0.0, 0.01], true) ? '' : $value;
             @endphp
             @if($deal->rehabLineItems->count())
             <div class="card-body border-bottom">
@@ -541,7 +542,7 @@
                             <td style="min-width: 140px;">
                                 <div class="input-group input-group-sm">
                                     <span class="input-group-text">$</span>
-                                    <input form="rehab-update-{{ $item->id }}" type="number" name="budgeted_cost" class="form-control" value="{{ $item->budgeted_cost }}" step="0.01" min="0" required>
+                                    <input form="rehab-update-{{ $item->id }}" type="number" name="budgeted_cost" class="form-control" value="{{ $rehabDirectEntryValue($item->budgeted_cost) }}" step="0.01" min="0" required>
                                 </div>
                             </td>
                             <td style="min-width: 110px;">
@@ -565,7 +566,7 @@
                             <td style="min-width: 140px;">
                                 <div class="input-group input-group-sm">
                                     <span class="input-group-text">$</span>
-                                    <input form="rehab-update-{{ $item->id }}" type="number" name="amount_paid" class="form-control" value="{{ $item->amount_paid }}" step="0.01" min="0">
+                                    <input form="rehab-update-{{ $item->id }}" type="number" name="amount_paid" class="form-control" value="{{ $rehabDirectEntryValue($item->amount_paid) }}" step="0.01" min="0">
                                 </div>
                             </td>
                             <td>{{ Fmt::currency($item->remaining_balance) }}</td>
@@ -615,7 +616,7 @@
                         <label class="form-label">{{ __('Budget') }}</label>
                         <div class="input-group">
                             <span class="input-group-text">$</span>
-                            <input type="number" name="budgeted_cost" class="form-control @error('budgeted_cost') is-invalid @enderror" value="{{ old('budgeted_cost') }}" step="0.01" min="0" required>
+                            <input type="number" name="budgeted_cost" class="form-control @error('budgeted_cost') is-invalid @enderror" value="{{ old('budgeted_cost', '') }}" step="0.01" min="0" required>
                             @error('budgeted_cost') <div class="invalid-feedback">{{ $message }}</div> @enderror
                         </div>
                     </div>
@@ -647,7 +648,7 @@
                         <label class="form-label">{{ __('Amount') }}</label>
                         <div class="input-group">
                             <span class="input-group-text">$</span>
-                            <input type="number" name="amount_paid" class="form-control @error('amount_paid') is-invalid @enderror" value="{{ old('amount_paid', 0) }}" step="0.01" min="0">
+                            <input type="number" name="amount_paid" class="form-control @error('amount_paid') is-invalid @enderror" value="{{ old('amount_paid', '') }}" step="0.01" min="0">
                             @error('amount_paid') <div class="invalid-feedback">{{ $message }}</div> @enderror
                         </div>
                     </div>

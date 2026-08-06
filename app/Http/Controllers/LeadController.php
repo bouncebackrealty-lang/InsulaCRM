@@ -280,6 +280,7 @@ class LeadController extends Controller
             'agent_id' => $lead->agent_id ?: auth()->id(),
             'title' => $property?->full_address ?: $lead->full_name . ' Deal',
             'stage' => BusinessModeService::getDefaultStage($tenant),
+            'inspection_period_days' => $isWholesale ? 10 : null,
             'notes' => $property?->notes,
         ];
 

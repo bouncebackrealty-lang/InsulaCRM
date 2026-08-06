@@ -65,6 +65,18 @@
                             <input type="text" name="name" class="form-control" placeholder="{{ __('Auto-generated from template + deal name') }}">
                         </div>
                     </div>
+                    @if($contractors->isNotEmpty())
+                    <div class="mb-3">
+                        <label class="form-label">{{ __('Contractor for this document') }} <small class="text-secondary">({{ __('optional') }})</small></label>
+                        <select name="contractor_id" id="contractor-select" class="form-select">
+                            <option value="">{{ __('No contractor information') }}</option>
+                            @foreach($contractors as $contractor)
+                                <option value="{{ $contractor->id }}">{{ $contractor->name }}{{ $contractor->service_area ? ' — ' . $contractor->service_area : '' }}</option>
+                            @endforeach
+                        </select>
+                        <small class="text-secondary">{{ __('Choose the contractor only when this document should merge contractor details.') }}</small>
+                    </div>
+                    @endif
 
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary" id="generate-btn" disabled>
@@ -220,6 +232,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var previewCard = document.getElementById('preview-card');
     var previewLoading = document.getElementById('preview-loading');
     var previewContent = document.getElementById('preview-content');
+    var contractorSelect = document.getElementById('contractor-select');
     var csrfToken = document.querySelector('meta[name="csrf-token"]').content;
 
     // Enable/disable buttons on template select
@@ -240,6 +253,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    if (contractorSelect) {
+        contractorSelect.addEventListener('change', function() {
+            if (templateSelect.value) {
+                loadPreview(templateSelect.value);
+            }
+        });
+    }
+
     // Close preview
     document.getElementById('close-preview-btn').addEventListener('click', function() {
         previewCard.style.display = 'none';
@@ -257,7 +278,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 'X-CSRF-TOKEN': csrfToken,
                 'Accept': 'application/json',
             },
-            body: JSON.stringify({ template_id: templateId })
+            body: JSON.stringify({
+                template_id: templateId,
+                contractor_id: contractorSelect ? contractorSelect.value : null,
+            })
         })
         .then(function(r) { return r.json(); })
         .then(function(data) {

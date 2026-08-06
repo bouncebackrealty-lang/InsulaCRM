@@ -145,11 +145,11 @@
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">{{ __('Bedrooms') }}</label>
-                    <input type="number" name="bedrooms" class="form-control" min="0" value="{{ old('bedrooms', $lead->property->bedrooms ?? '') }}">
+                    <input type="text" inputmode="numeric" name="bedrooms" class="form-control" value="{{ old('bedrooms', $directEntryValue($lead->property->bedrooms ?? null)) }}">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">{{ __('Bathrooms') }}</label>
-                    <input type="number" name="bathrooms" class="form-control" min="0" step="0.5" value="{{ old('bathrooms', $lead->property->bathrooms ?? '') }}">
+                    <input type="text" inputmode="numeric" name="bathrooms" class="form-control" value="{{ old('bathrooms', $directEntryValue($lead->property->bathrooms ?? null)) }}">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">{{ __('Year Built') }}</label>

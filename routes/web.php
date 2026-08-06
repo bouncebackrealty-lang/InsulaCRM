@@ -337,6 +337,8 @@ Route::middleware(['auth', 'tenant', 'require2fa'])->group(function () {
         Route::post('/pipeline/{deal}/documents/generate', [DocumentGeneratorController::class, 'store'])->name('documents.store');
         Route::post('/documents/preview-deal/{deal}', [DocumentGeneratorController::class, 'previewWithDeal'])->name('documents.previewWithDeal');
         Route::get('/documents/{document}/download-pdf', [DocumentGeneratorController::class, 'downloadPdf'])->name('documents.downloadPdf');
+        Route::get('/documents/{document}/edit', [DocumentGeneratorController::class, 'edit'])->name('documents.edit');
+        Route::put('/documents/{document}', [DocumentGeneratorController::class, 'update'])->name('documents.update');
         Route::get('/documents/{document}', [DocumentGeneratorController::class, 'show'])->name('documents.show');
         Route::get('/documents/{document}/print', [DocumentGeneratorController::class, 'print'])->name('documents.print');
         Route::delete('/documents/{document}', [DocumentGeneratorController::class, 'destroy'])->name('documents.destroy');

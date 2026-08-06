@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Deal;
+use App\Models\Contractor;
 use App\Services\BusinessModeService;
 use Carbon\Carbon;
 use Fmt;
@@ -10,37 +11,9 @@ use Fmt;
 class DocumentMergeService
 {
     /**
-     * Currency fields that should be formatted with Fmt::currency().
-     */
-    protected array $currencyFields = [
-        'deal.contract_price',
-        'deal.assignment_fee',
-        'deal.earnest_money',
-        'deal.total_commission',
-        'property.estimated_value',
-        'property.list_price',
-        'property.sold_price',
-        'property.after_repair_value',
-        'property.repair_estimate',
-        'property.our_offer',
-    ];
-
-    /**
-     * Date fields that should be formatted for human readability.
-     */
-    protected array $dateFields = [
-        'deal.estimated_close_date',
-        'deal.contract_date',
-        'deal.closing_date',
-        'deal.listing_date',
-        'property.listed_at',
-        'property.sold_at',
-    ];
-
-    /**
      * Replace all {{merge.field}} placeholders with actual values from the deal.
      */
-    public function merge(string $template, Deal $deal): string
+    public function merge(string $template, Deal $deal, ?Contractor $contractor = null): string
     {
         // Eager load relationships
         $deal->loadMissing(['lead.property', 'tenant']);
@@ -54,19 +27,22 @@ class DocumentMergeService
         $property = $lead?->property;
 
         // Build the merge data map
-        $data = $this->buildMergeData($deal, $lead, $property, $buyer, $tenant);
+        $data = $this->buildMergeData($deal, $lead, $property, $buyer, $tenant, $contractor);
 
         // Replace all {{field}} placeholders
-        return preg_replace_callback('/\{\{([a-z_.]+)\}\}/', function ($matches) use ($data) {
+        $rendered = preg_replace_callback('/\{\{([a-z_.]+)\}\}/', function ($matches) use ($data) {
             $field = $matches[1];
-            return $data[$field] ?? '';
+
+            return e($data[$field] ?? '');
         }, $template);
+
+        return $this->normalizeDuplicateCurrencySymbols($rendered);
     }
 
     /**
      * Build the complete merge data map.
      */
-    protected function buildMergeData(Deal $deal, $lead, $property, $buyer, $tenant): array
+    protected function buildMergeData(Deal $deal, $lead, $property, $buyer, $tenant, ?Contractor $contractor = null): array
     {
         $data = [];
 
@@ -79,6 +55,15 @@ class DocumentMergeService
         $data['deal.contract_date'] = $this->formatDate($deal->contract_date);
         $data['deal.closing_date'] = $this->formatDate($deal->closing_date);
         $data['deal.notes'] = $deal->notes ?? '';
+        $data['deal.inspection_period_days'] = $deal->inspection_period_days ?? '';
+        $data['deal.due_diligence_end_date'] = $this->formatDate($deal->due_diligence_end_date);
+        $data['deal.total_purchase_price'] = $deal->contract_price !== null
+            ? $this->formatCurrency((float) $deal->contract_price + (float) ($deal->assignment_fee ?? 0))
+            : '';
+        $data['deal.closing_month_day'] = $deal->closing_date ? $deal->closing_date->format('F j') : '';
+        $data['deal.closing_year'] = $deal->closing_date ? $deal->closing_date->format('Y') : '';
+        $data['today_month_day'] = now()->format('F j');
+        $data['today_year'] = now()->format('Y');
 
         // Deal fields (RE)
         $data['deal.total_commission'] = $this->formatCurrency($deal->total_commission);
@@ -107,9 +92,9 @@ class DocumentMergeService
         $data['property.property_type'] = $property ? __(ucwords(str_replace('_', ' ', $property->property_type ?? ''))) : '';
         $data['property.bedrooms'] = (string) ($property->bedrooms ?? '');
         $data['property.bathrooms'] = (string) ($property->bathrooms ?? '');
-        $data['property.square_footage'] = $property->square_footage ? number_format($property->square_footage) : '';
+        $data['property.square_footage'] = $property?->square_footage ? number_format($property->square_footage) : '';
         $data['property.year_built'] = (string) ($property->year_built ?? '');
-        $data['property.lot_size'] = $property->lot_size ? Fmt::area($property->lot_size) : '';
+        $data['property.lot_size'] = $property?->lot_size ? Fmt::area($property->lot_size) : '';
         $data['property.estimated_value'] = $this->formatCurrency($property->estimated_value ?? null);
 
         // Property fields (RE)
@@ -134,11 +119,29 @@ class DocumentMergeService
         $data['buyer.company'] = $buyer->company ?? '';
         $data['buyer.phone'] = $buyer->phone ?? '';
         $data['buyer.email'] = $buyer->email ?? '';
+        $data['buyer.full_name'] = trim(($buyer->first_name ?? '') . ' ' . ($buyer->last_name ?? ''));
+        $data['buyer.top_match'] = trim($buyer->company ?? '')
+            ?: $data['buyer.full_name']
+            ?: trim($buyer->email ?? '')
+            ?: __('BOUNCE BACK REALTY and/or its assigns');
 
         // Company / Tenant fields
         $data['company.name'] = $tenant->name ?? '';
         $data['company.email'] = $tenant->email ?? '';
         $data['company.phone'] = $tenant->phone ?? '';
+
+
+        $data['contractor.name'] = $contractor->name ?? '';
+        $data['contractor.phone'] = $contractor->phone ?? '';
+        $data['contractor.email'] = $contractor->email ?? '';
+        $data['contractor.trade'] = $contractor && !empty($contractor->specialty)
+            ? implode(', ', array_map(fn ($trade) => __(ucwords(str_replace('_', ' ', $trade))), $contractor->specialty))
+            : '';
+        $data['contractor.service_area'] = $contractor->service_area ?? '';
+        $data['contractor.status'] = $contractor && $contractor->status
+            ? __(ucwords(str_replace('_', ' ', $contractor->status)))
+            : '';
+        $data['contractor.notes'] = $contractor->notes ?? '';
 
         // Date fields
         $data['today'] = now()->format('m/d/Y');
@@ -205,9 +208,14 @@ class DocumentMergeService
             'deal.stage' => __('Under Contract'),
             'deal.contract_price' => Fmt::currency(185000),
             'deal.earnest_money' => Fmt::currency(2500),
+            'deal.inspection_period_days' => '10',
+            'deal.due_diligence_end_date' => now()->addWeekdays(10)->format('F j, Y'),
             'deal.estimated_close_date' => now()->addDays(30)->format('F j, Y'),
             'deal.contract_date' => now()->format('F j, Y'),
             'deal.closing_date' => now()->addDays(30)->format('F j, Y'),
+            'deal.closing_month_day' => now()->addDays(30)->format('F j'),
+            'deal.closing_year' => now()->addDays(30)->format('Y'),
+            'deal.total_purchase_price' => Fmt::currency(200000),
             'deal.notes' => 'Subject to clear title and satisfactory inspection.',
 
             // Deal (RE)
@@ -259,8 +267,19 @@ class DocumentMergeService
             'buyer.first_name' => 'Jane',
             'buyer.last_name' => 'Doe',
             'buyer.company' => $isRE ? 'Doe Family' : 'Doe Investments LLC',
+            'buyer.top_match' => $isRE ? 'Doe Family' : 'Doe Investments LLC',
             'buyer.phone' => '(555) 987-6543',
             'buyer.email' => 'jane@doeinvestments.com',
+            'buyer.full_name' => 'Jane Doe',
+
+            // Contractor
+            'contractor.name' => 'Acme Renovations LLC',
+            'contractor.phone' => '(555) 246-8100',
+            'contractor.email' => 'bids@acmerenovations.example',
+            'contractor.trade' => 'General Contractor',
+            'contractor.service_area' => 'Orlando Metro',
+            'contractor.status' => 'Hired',
+            'contractor.notes' => 'Licensed and insured.',
 
             // Company
             'company.name' => auth()->user()->tenant->name ?? 'Your Company',
@@ -270,11 +289,28 @@ class DocumentMergeService
             // Dates
             'today' => now()->format('m/d/Y'),
             'today_long' => now()->format('F j, Y'),
+            'today_month_day' => now()->format('F j'),
+            'today_year' => now()->format('Y'),
         ];
 
-        return preg_replace_callback('/\{\{([a-z_.]+)\}\}/', function ($matches) use ($sampleData) {
+        $rendered = preg_replace_callback('/\{\{([a-z_.]+)\}\}/', function ($matches) use ($sampleData) {
             $field = $matches[1];
+
             return $sampleData[$field] ?? '{{' . $field . '}}';
         }, $template);
+
+        return $this->normalizeDuplicateCurrencySymbols($rendered);
+    }
+
+    /**
+     * Client templates sometimes include a static "$" just before an inline
+     * merge line. Currency values also include "$", so collapse only that
+     * duplicate while retaining normal currency values elsewhere.
+     */
+    private function normalizeDuplicateCurrencySymbols(string $html): string
+    {
+        $html = preg_replace('/(?<=\$)(\s*<[^>]+>\s*)\$(?=\d)/', '$1', $html);
+
+        return preg_replace('/(?<=\$)\$(?=\d)/', '', $html);
     }
 }

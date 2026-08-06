@@ -28,7 +28,7 @@ class DocumentGeneratorController extends Controller
      */
     public function create(Deal $deal)
     {
-        $deal->loadMissing(['lead.property', 'tenant', 'buyerMatches.buyer']);
+        $deal->loadMissing(['lead.property', 'tenant', 'buyerMatches.buyer', 'contractors.contractor']);
 
         $templates = DocumentTemplate::orderBy('name')->get();
 
@@ -37,7 +37,12 @@ class DocumentGeneratorController extends Controller
             ->latest()
             ->get();
 
-        return view('documents.generate', compact('deal', 'templates', 'generatedDocuments'));
+        $contractors = $deal->contractors
+            ->map(fn ($dealContractor) => $dealContractor->contractor)
+            ->filter()
+            ->values();
+
+        return view('documents.generate', compact('deal', 'templates', 'generatedDocuments', 'contractors'));
     }
 
     /**
@@ -47,12 +52,13 @@ class DocumentGeneratorController extends Controller
     {
         $request->validate([
             'template_id' => 'required|exists:document_templates,id',
+            'contractor_id' => 'nullable|integer',
         ]);
 
         $template = DocumentTemplate::findOrFail($request->template_id);
-        $deal->loadMissing(['lead.property', 'tenant', 'buyerMatches.buyer']);
+        $deal->loadMissing(['lead.property', 'tenant', 'buyerMatches.buyer', 'contractors.contractor']);
 
-        $rendered = $this->mergeService->merge($template->content, $deal);
+        $rendered = $this->mergeService->merge($template->content, $deal, $this->selectedContractor($request, $deal));
 
         return response()->json([
             'html' => $rendered,
@@ -67,16 +73,15 @@ class DocumentGeneratorController extends Controller
         $request->validate([
             'template_id' => 'required|exists:document_templates,id',
             'name' => 'nullable|string|max:255',
+            'contractor_id' => 'nullable|integer',
         ]);
 
         $template = DocumentTemplate::findOrFail($request->template_id);
-        $deal->loadMissing(['lead.property', 'tenant', 'buyerMatches.buyer']);
+        $deal->loadMissing(['lead.property', 'tenant', 'buyerMatches.buyer', 'contractors.contractor']);
 
-        $rendered = $this->mergeService->merge($template->content, $deal);
+        $rendered = $this->mergeService->merge($template->content, $deal, $this->selectedContractor($request, $deal));
 
-        // Strip script tags to prevent stored XSS in rendered documents
-        $rendered = preg_replace('/<script\b[^>]*>.*?<\/script>/is', '', $rendered);
-        $rendered = preg_replace('/\bon\w+\s*=\s*["\'][^"\']*["\']/i', '', $rendered);
+        $rendered = $this->sanitizeDocumentHtml($rendered);
 
         $documentName = $request->input('name')
             ?: $template->name . ' - ' . ($deal->lead->full_name ?? $deal->title);
@@ -109,6 +114,46 @@ class DocumentGeneratorController extends Controller
         $document->loadMissing(['deal', 'template', 'user']);
 
         return view('documents.show', compact('document'));
+    }
+
+    /**
+     * Edit a generated document before it is downloaded or sent.
+     */
+    public function edit(GeneratedDocument $document)
+    {
+        $this->authorizeDocument($document);
+
+        return view('documents.edit', compact('document'));
+    }
+
+    /**
+     * Save a one-off revision to a generated document snapshot.
+     */
+    public function update(Request $request, GeneratedDocument $document)
+    {
+        $this->authorizeDocument($document);
+
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'content' => 'required|string',
+        ]);
+
+        // Keep audit records small. The generated snapshot itself retains the
+        // full document content, while the audit only needs to record that it
+        // was revised.
+        $before = ['name' => $document->name];
+        $document->update([
+            'name' => $data['name'],
+            'content' => $this->sanitizeDocumentHtml($data['content']),
+        ]);
+
+        AuditLog::log('document.updated', $document, $before, [
+            'name' => $document->name,
+            'content_updated' => true,
+        ]);
+
+        return redirect()->route('documents.show', $document)
+            ->with('success', __('Document changes saved.'));
     }
 
     /**
@@ -224,8 +269,9 @@ class DocumentGeneratorController extends Controller
         if ($property) {
             $comps = \App\Models\ComparableSale::where('property_id', $property->id)->get();
             if ($comps->isNotEmpty()) {
-                $arvAvg = $comps->avg('sold_price');
-                $arvMedian = $comps->median('sold_price');
+                $adjustedPrices = $comps->pluck('adjusted_price')->filter(fn ($price) => $price !== null && $price !== '');
+                $arvAvg = $adjustedPrices->avg();
+                $arvMedian = $adjustedPrices->median();
 
                 $html .= '<h2>ARV Summary</h2>';
                 $html .= '<table style="width:100%; border-collapse:collapse; margin-bottom:20px;">';
@@ -241,13 +287,13 @@ class DocumentGeneratorController extends Controller
                 $html .= '<table style="width:100%; border-collapse:collapse; margin-bottom:20px;">';
                 $html .= '<tr style="background:#f5f5f5;"><th style="padding:8px; border:1px solid #ddd;">Address</th><th style="padding:8px; border:1px solid #ddd;">Sold Price</th><th style="padding:8px; border:1px solid #ddd;">Sq Ft</th><th style="padding:8px; border:1px solid #ddd;">$/Sq Ft</th><th style="padding:8px; border:1px solid #ddd;">Sold Date</th></tr>';
                 foreach ($comps as $comp) {
-                    $ppsf = ($comp->sold_price && $comp->square_footage) ? round($comp->sold_price / $comp->square_footage, 2) : 'N/A';
+                    $ppsf = ($comp->sale_price && $comp->sqft) ? round($comp->sale_price / $comp->sqft, 2) : 'N/A';
                     $html .= '<tr>';
                     $html .= '<td style="padding:8px; border:1px solid #ddd;">' . e($comp->address ?? 'N/A') . '</td>';
-                    $html .= '<td style="padding:8px; border:1px solid #ddd;">' . ($comp->sold_price ? \Fmt::currency($comp->sold_price) : 'N/A') . '</td>';
-                    $html .= '<td style="padding:8px; border:1px solid #ddd;">' . ($comp->square_footage ? number_format($comp->square_footage) : 'N/A') . '</td>';
+                    $html .= '<td style="padding:8px; border:1px solid #ddd;">' . ($comp->sale_price ? \Fmt::currency($comp->sale_price) : 'N/A') . '</td>';
+                    $html .= '<td style="padding:8px; border:1px solid #ddd;">' . ($comp->sqft ? number_format($comp->sqft) : 'N/A') . '</td>';
                     $html .= '<td style="padding:8px; border:1px solid #ddd;">' . (is_numeric($ppsf) ? \Fmt::currency($ppsf) : 'N/A') . '</td>';
-                    $html .= '<td style="padding:8px; border:1px solid #ddd;">' . ($comp->sold_date ? \Fmt::date($comp->sold_date) : 'N/A') . '</td>';
+                    $html .= '<td style="padding:8px; border:1px solid #ddd;">' . ($comp->sale_date ? \Fmt::date($comp->sale_date) : 'N/A') . '</td>';
                     $html .= '</tr>';
                 }
                 $html .= '</table>';
@@ -275,5 +321,27 @@ class DocumentGeneratorController extends Controller
         $printHtml = app(\App\Services\DocumentMergeService::class)->generatePrintHtml($html, 'Investor Packet — ' . ($property->address ?? $deal->title), auth()->user()->tenant->name);
 
         return response($printHtml);
+    }
+
+    private function selectedContractor(Request $request, Deal $deal): ?\App\Models\Contractor
+    {
+        if (! $request->filled('contractor_id')) {
+            return null;
+        }
+
+        $contractor = $deal->contractors
+            ->firstWhere('contractor_id', (int) $request->input('contractor_id'))
+            ?->contractor;
+
+        abort_unless($contractor && $contractor->tenant_id === auth()->user()->tenant_id, 422);
+
+        return $contractor;
+    }
+
+    private function sanitizeDocumentHtml(string $html): string
+    {
+        $html = preg_replace('/<script\b[^>]*>.*?<\/script>/is', '', $html);
+
+        return preg_replace('/\bon\w+\s*=\s*["\'][^"\']*["\']/i', '', $html);
     }
 }

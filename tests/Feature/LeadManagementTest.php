@@ -160,7 +160,22 @@ class LeadManagementTest extends TestCase
             'lead_id' => $lead->id,
             'earnest_money' => 1750,
             'assignment_fee' => null,
+            'inspection_period_days' => 10,
         ]);
+    }
+
+    public function test_property_detail_uses_direct_numeric_entry_for_bedrooms_and_bathrooms(): void
+    {
+        $this->actingAsAdmin();
+        $lead = $this->createLead();
+
+        $response = $this->get("/leads/{$lead->id}");
+
+        $response->assertOk();
+        $response->assertSee('type="text" inputmode="numeric" name="bedrooms"', false);
+        $response->assertSee('type="text" inputmode="numeric" name="bathrooms"', false);
+        $response->assertDontSee('type="number" name="bedrooms"', false);
+        $response->assertDontSee('type="number" name="bathrooms"', false);
     }
 
     public function test_admin_can_upload_more_than_ten_photos_to_a_lead(): void
@@ -180,6 +195,19 @@ class LeadManagementTest extends TestCase
 
         $response->assertRedirect("/leads/{$lead->id}");
         $this->assertSame(12, LeadPhoto::where('lead_id', $lead->id)->count());
+    }
+
+    public function test_photo_uploader_view_keeps_multi_file_selection_in_javascript_and_uploads_one_file_per_request(): void
+    {
+        $this->actingAsAdmin();
+        $lead = $this->createLead();
+
+        $response = $this->get("/leads/{$lead->id}");
+
+        $response->assertOk();
+        $response->assertSee('var selectedFiles = [];', false);
+        $response->assertSee("payload.append('photos[]', files[index]);", false);
+        $response->assertDontSee('fileInput.files = e.dataTransfer.files;', false);
     }
 
     public function test_admin_can_create_lead_assigned_to_agent_team_member(): void

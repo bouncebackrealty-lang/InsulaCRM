@@ -95,9 +95,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var clearBtn = document.getElementById('photo-clear-btn');
     var form = document.getElementById('photo-upload-form');
     var submitBtn = document.getElementById('photo-upload-submit');
-    var batchSize = 20;
-
-    var maxBatchBytes = 4 * 1024 * 1024;
+    var selectedFiles = [];
 
     // Click to browse
     dropZone.addEventListener('click', function() { fileInput.click(); });
@@ -113,15 +111,19 @@ document.addEventListener('DOMContentLoaded', function() {
     dropZone.addEventListener('drop', function(e) {
         e.preventDefault();
         dropZone.style.background = '';
-        fileInput.files = e.dataTransfer.files;
+        selectedFiles = Array.prototype.slice.call(e.dataTransfer.files || []);
+        fileInput.value = '';
         showPreviews();
     });
 
-    fileInput.addEventListener('change', showPreviews);
+    fileInput.addEventListener('change', function() {
+        selectedFiles = Array.prototype.slice.call(fileInput.files || []);
+        showPreviews();
+    });
 
     function showPreviews() {
         previewArea.innerHTML = '';
-        var files = fileInput.files;
+        var files = selectedFiles;
         if (!files.length) {
             previewArea.style.display = 'none';
             actions.style.display = 'none';
@@ -151,19 +153,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
     clearBtn.addEventListener('click', function() {
         fileInput.value = '';
+        selectedFiles = [];
         previewArea.innerHTML = '';
         previewArea.style.display = 'none';
         actions.style.display = 'none';
     });
 
     form.addEventListener('submit', function(e) {
-        var files = Array.prototype.slice.call(fileInput.files || []);
-        if (files.length <= 1 || !window.fetch) {
+        if (!selectedFiles.length || !window.fetch) {
             return;
         }
 
         e.preventDefault();
-        uploadInBatches(files);
+        uploadSequentially(selectedFiles);
     });
 
     function captionFor(index) {
@@ -181,41 +183,18 @@ document.addEventListener('DOMContentLoaded', function() {
         countLabel.textContent = label;
     }
 
-    function uploadInBatches(files) {
+    function uploadSequentially(files) {
         var token = form.querySelector('input[name="_token"]').value;
         var total = files.length;
         var uploaded = 0;
-        var batches = [];
-        var batch = [];
-        var batchBytes = 0;
-
-        files.forEach(function(file, index) {
-
-            if (batch.length && (batch.length >= batchSize || batchBytes + file.size > maxBatchBytes)) {
-                batches.push(batch);
-                batch = [];
-                batchBytes = 0;
-            }
-
-            batch.push({ file: file, index: index });
-            batchBytes += file.size;
-        });
-
-        if (batch.length) {
-            batches.push(batch);
-        }
 
         setUploadingState(true, '{{ __('Uploading photos...') }}');
 
-        function sendNextBatch(batchIndex) {
-            var currentBatch = batches[batchIndex];
+        function sendNext(index) {
             var payload = new FormData();
             payload.append('_token', token);
-
-            currentBatch.forEach(function(item) {
-                payload.append('photos[]', item.file);
-                payload.append('captions[]', captionFor(item.index));
-            });
+            payload.append('photos[]', files[index]);
+            payload.append('captions[]', captionFor(index));
 
             return fetch(form.action, {
                 method: 'POST',
@@ -228,18 +207,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     throw new Error('Upload failed');
                 }
 
-                uploaded += currentBatch.length;
+                uploaded++;
                 setUploadingState(true, uploaded + ' / ' + total + ' {{ __('uploaded') }}');
 
                 if (uploaded < total) {
-                    return sendNextBatch(batchIndex + 1);
+                    return sendNext(index + 1);
                 }
 
                 window.location.reload();
             });
         }
 
-        sendNextBatch(0).catch(function() {
+        sendNext(0).catch(function() {
             setUploadingState(false, '{{ __('Upload failed. Please try again.') }}');
         });
     }

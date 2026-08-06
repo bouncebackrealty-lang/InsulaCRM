@@ -72,8 +72,13 @@ class DocumentTemplate extends Model
             'deal.stage' => __('Deal Stage'),
             'deal.contract_price' => __('Contract Price'),
             'deal.earnest_money' => __('Earnest Money'),
+            'deal.inspection_period_days' => __('Inspection / Due Diligence Days'),
+            'deal.due_diligence_end_date' => __('Due Diligence End Date'),
             'deal.contract_date' => __('Contract Date'),
             'deal.closing_date' => __('Closing Date'),
+            'deal.closing_month_day' => __('Closing Month and Day'),
+            'deal.closing_year' => __('Closing Year'),
+            'deal.total_purchase_price' => __('Total Purchase Price'),
             'deal.notes' => __('Deal Notes'),
         ];
 
@@ -128,8 +133,18 @@ class DocumentTemplate extends Model
                 'buyer.first_name' => __($isRE ? 'Client First Name' : 'Buyer First Name'),
                 'buyer.last_name' => __($isRE ? 'Client Last Name' : 'Buyer Last Name'),
                 'buyer.company' => __($isRE ? 'Client Company' : 'Buyer Company'),
+                'buyer.top_match' => __($isRE ? 'Top Matched Client' : 'Top Matched Buyer'),
                 'buyer.phone' => __($isRE ? 'Client Phone' : 'Buyer Phone'),
                 'buyer.email' => __($isRE ? 'Client Email' : 'Buyer Email'),
+            ],
+            __('Contractor') => [
+                'contractor.name' => __('Contractor Name'),
+                'contractor.phone' => __('Contractor Phone'),
+                'contractor.email' => __('Contractor Email'),
+                'contractor.trade' => __('Contractor Trade / Specialty'),
+                'contractor.service_area' => __('Contractor Service Area'),
+                'contractor.status' => __('Contractor Status'),
+                'contractor.notes' => __('Contractor Notes'),
             ],
             __('Company') => [
                 'company.name' => __('Company Name'),
@@ -139,6 +154,8 @@ class DocumentTemplate extends Model
             __('Dates') => [
                 'today' => __('Today (short)'),
                 'today_long' => __('Today (long format)'),
+                'today_month_day' => __('Today (month and day)'),
+                'today_year' => __('Today (year)'),
             ],
         ];
     }

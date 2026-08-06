@@ -11,6 +11,7 @@ use App\Models\DealLender;
 use App\Models\LeadPhoto;
 use App\Models\Lender;
 use App\Models\LenderLoanProgram;
+use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -49,6 +50,34 @@ class DealManagementTest extends TestCase
             'deal_id' => $deal->id,
             'type' => 'stage_change',
         ]);
+    }
+
+    public function test_under_contract_stage_sets_an_editable_ten_business_day_due_diligence_default(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-07 09:00:00')); // Friday
+
+        try {
+            $this->actingAsAdmin();
+            $deal = $this->createDeal([
+                'stage' => 'offer_presented',
+                'contract_date' => null,
+                'inspection_period_days' => null,
+                'due_diligence_end_date' => null,
+            ]);
+
+            $response = $this->patch("/pipeline/{$deal->id}/stage", [
+                'stage' => 'under_contract',
+            ]);
+
+            $response->assertJson(['success' => true]);
+
+            $deal->refresh();
+            $this->assertSame(10, $deal->inspection_period_days);
+            $this->assertSame('2026-08-07', $deal->contract_date->toDateString());
+            $this->assertSame('2026-08-21', $deal->due_diligence_end_date->toDateString());
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     public function test_field_scout_cannot_access_pipeline(): void
@@ -96,6 +125,7 @@ class DealManagementTest extends TestCase
             'stage' => 'prospecting',
             'contract_price' => 90000,
             'assignment_fee' => 30000,
+            'inspection_period_days' => 10,
         ]);
 
         $pipeline = $this->get('/pipeline');
