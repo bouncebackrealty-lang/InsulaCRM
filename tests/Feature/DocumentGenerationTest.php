@@ -65,6 +65,40 @@ class DocumentGenerationTest extends TestCase
         $this->assertStringContainsString('Roofing', $document->content);
     }
 
+    public function test_document_generation_defaults_to_the_only_attached_contractor(): void
+    {
+        $this->actingAsAdmin();
+
+        $deal = $this->createDeal();
+        $contractor = Contractor::create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'Only Attached Contractor',
+        ]);
+        DealContractor::create([
+            'deal_id' => $deal->id,
+            'contractor_id' => $contractor->id,
+        ]);
+        $template = DocumentTemplate::create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'Single contractor default',
+            'type' => 'other',
+            'content' => '<p>{{contractor.name}}</p>',
+        ]);
+
+        $this->get(route('documents.generate', $deal))
+            ->assertOk()
+            ->assertSee('When one contractor is attached to the deal, it is used automatically.');
+
+        $this->post(route('documents.store', $deal), [
+            'template_id' => $template->id,
+        ]);
+
+        $this->assertStringContainsString(
+            'Only Attached Contractor',
+            GeneratedDocument::latest('id')->value('content'),
+        );
+    }
+
     public function test_generated_document_can_be_edited_without_changing_the_master_template(): void
     {
         $this->actingAsAdmin();

@@ -74,7 +74,7 @@
                                 <option value="{{ $contractor->id }}">{{ $contractor->name }}{{ $contractor->service_area ? ' — ' . $contractor->service_area : '' }}</option>
                             @endforeach
                         </select>
-                        <small class="text-secondary">{{ __('Choose the contractor only when this document should merge contractor details.') }}</small>
+                        <small class="text-secondary">{{ __('When one contractor is attached to the deal, it is used automatically. Choose a contractor here when more than one is attached.') }}</small>
                     </div>
                     @endif
 

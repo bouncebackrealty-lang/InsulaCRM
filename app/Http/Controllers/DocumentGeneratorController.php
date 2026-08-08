@@ -326,7 +326,14 @@ class DocumentGeneratorController extends Controller
     private function selectedContractor(Request $request, Deal $deal): ?\App\Models\Contractor
     {
         if (! $request->filled('contractor_id')) {
-            return null;
+            $attachedContractors = $deal->contractors
+                ->map(fn ($dealContractor) => $dealContractor->contractor)
+                ->filter()
+                ->values();
+
+            return $attachedContractors->count() === 1
+                ? $attachedContractors->first()
+                : null;
         }
 
         $contractor = $deal->contractors
