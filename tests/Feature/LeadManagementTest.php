@@ -6,6 +6,7 @@ use App\Models\Lead;
 use App\Models\LeadPhoto;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
 
 class LeadManagementTest extends TestCase
@@ -208,6 +209,34 @@ class LeadManagementTest extends TestCase
         $response->assertSee('var selectedFiles = [];', false);
         $response->assertSee("payload.append('photos[]', files[index]);", false);
         $response->assertDontSee('fileInput.files = e.dataTransfer.files;', false);
+    }
+
+    public function test_photo_delete_returns_to_the_photos_section(): void
+    {
+        Storage::fake('public');
+        $this->actingAsAdmin();
+        $lead = $this->createLead();
+        $photo = LeadPhoto::create([
+            'tenant_id' => $this->tenant->id, 'lead_id' => $lead->id, 'uploaded_by' => $this->adminUser->id,
+            'filename' => 'photo.jpg', 'original_name' => 'photo.jpg', 'path' => 'lead-photos/test/photo.jpg', 'mime_type' => 'image/jpeg', 'size' => 10,
+        ]);
+
+        $this->delete(route('leads.photos.delete', [$lead, $photo]))
+            ->assertRedirect(route('leads.show', $lead) . '#photos-section');
+    }
+
+    public function test_signed_buyer_photo_gallery_shows_all_property_photos_without_login(): void
+    {
+        $this->actingAsAdmin();
+        $lead = $this->createLead();
+        $this->createProperty(['lead_id' => $lead->id, 'address' => 'Gallery Street', 'city' => 'Atlanta', 'state' => 'GA', 'zip_code' => '30318']);
+        LeadPhoto::create(['tenant_id' => $this->tenant->id, 'lead_id' => $lead->id, 'uploaded_by' => $this->adminUser->id, 'filename' => 'one.jpg', 'original_name' => 'one.jpg', 'path' => 'lead-photos/one.jpg', 'mime_type' => 'image/jpeg', 'size' => 10]);
+        LeadPhoto::create(['tenant_id' => $this->tenant->id, 'lead_id' => $lead->id, 'uploaded_by' => $this->adminUser->id, 'filename' => 'two.jpg', 'original_name' => 'two.jpg', 'path' => 'lead-photos/two.jpg', 'mime_type' => 'image/jpeg', 'size' => 10]);
+
+        $url = URL::temporarySignedRoute('buyer-photo-gallery.show', now()->addHour(), ['lead' => $lead->id]);
+        auth()->logout();
+        $this->get($url)->assertOk()->assertSee('Property Photos')->assertSee('lead-photos/one.jpg')->assertSee('lead-photos/two.jpg');
+        $this->get(route('buyer-photo-gallery.show', $lead))->assertForbidden();
     }
 
     public function test_admin_can_create_lead_assigned_to_agent_team_member(): void

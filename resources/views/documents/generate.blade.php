@@ -52,7 +52,7 @@
                             <select name="template_id" id="template-select" class="form-select" required>
                                 <option value="">{{ __('Choose a template...') }}</option>
                                 @foreach($templates as $template)
-                                    <option value="{{ $template->id }}" data-type="{{ $template->type }}">
+                                    <option value="{{ $template->id }}" data-type="{{ $template->type }}" data-input-fields='@json($template->input_fields ?? [])' data-edit-url="{{ route('document-templates.edit', $template) }}">
                                         {{ $template->name }}
                                         ({{ \App\Models\DocumentTemplate::typeLabel($template->type) }})
                                         {{ $template->is_default ? ' *' : '' }}
@@ -78,11 +78,20 @@
                     </div>
                     @endif
 
+                    <div id="document-inputs-wrap" class="mb-3" style="display:none;">
+                        <label class="form-label">{{ __('Document-specific details') }}</label>
+                        <div class="form-hint mb-2">{{ __('Enter any values that should appear only in this generated document. They remain editable in the generated document afterward.') }}</div>
+                        <div id="document-inputs" class="row g-2"></div>
+                    </div>
+
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary" id="generate-btn" disabled>
                             <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z"/><path d="M12 11v6"/><path d="M9 14l3 -3l3 3"/></svg>
                             {{ __('Generate Document') }}
                         </button>
+                        @if(auth()->user()->isAdmin())
+                        <a href="#" class="btn btn-outline-primary d-none" id="edit-master-template-btn">{{ __('Edit Master Template') }}</a>
+                        @endif
                         <button type="button" class="btn btn-outline-secondary" id="preview-deal-btn" disabled>
                             <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/><path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/></svg>
                             {{ __('Preview with Deal Data') }}
@@ -205,6 +214,27 @@
                         <span class="text-warning">{{ __('No buyer matched') }}</span>
                     @endif
                 </div>
+                <div class="mb-3">
+                    <h4 class="text-secondary mb-1">{{ __('Selected Lender') }}</h4>
+                    @php $selectedLender = $deal->lenders->first()?->lender; @endphp
+                    @if($selectedLender)
+                        <div>{{ $selectedLender->company ?: $selectedLender->name }}</div>
+                        @if($selectedLender->phone || $selectedLender->email)
+                            <div class="text-secondary small">{{ $selectedLender->phone }} {{ $selectedLender->email ? '| ' . $selectedLender->email : '' }}</div>
+                        @endif
+                    @else
+                        <span class="text-warning">{{ __('No lender selected') }}</span>
+                    @endif
+                </div>
+                <div class="mb-3">
+                    <h4 class="text-secondary mb-1">{{ __('Title Company / Closing Attorney') }}</h4>
+                    @if($deal->titleCompany)
+                        <div>{{ $deal->titleCompany->name }}</div>
+                        <div class="text-secondary small">{{ $deal->titleCompany->closing_attorney }}{{ $deal->titleCompany->full_address ? ($deal->titleCompany->closing_attorney ? ' | ' : '') . $deal->titleCompany->full_address : '' }}</div>
+                    @else
+                        <span class="text-warning">{{ __('No title company selected') }}</span>
+                    @endif
+                </div>
                 <div>
                     <h4 class="text-secondary mb-1">{{ __('Financials') }}</h4>
                     <div class="text-secondary small">
@@ -233,6 +263,9 @@ document.addEventListener('DOMContentLoaded', function() {
     var previewLoading = document.getElementById('preview-loading');
     var previewContent = document.getElementById('preview-content');
     var contractorSelect = document.getElementById('contractor-select');
+    var inputsWrap = document.getElementById('document-inputs-wrap');
+    var inputsContainer = document.getElementById('document-inputs');
+    var masterEditButton = document.getElementById('edit-master-template-btn');
     var csrfToken = document.querySelector('meta[name="csrf-token"]').content;
 
     // Enable/disable buttons on template select
@@ -242,7 +275,12 @@ document.addEventListener('DOMContentLoaded', function() {
         previewBtn.disabled = !hasValue;
 
         if (hasValue) {
+            renderDocumentInputs(this.options[this.selectedIndex]);
             loadPreview(this.value);
+        } else {
+            inputsWrap.style.display = 'none';
+            inputsContainer.innerHTML = '';
+            if (masterEditButton) masterEditButton.classList.add('d-none');
         }
     });
 
@@ -259,6 +297,56 @@ document.addEventListener('DOMContentLoaded', function() {
                 loadPreview(templateSelect.value);
             }
         });
+    }
+
+    function renderDocumentInputs(option) {
+        var fields = [];
+        try { fields = JSON.parse(option.dataset.inputFields || '[]'); } catch (e) { fields = []; }
+        inputsContainer.innerHTML = '';
+        inputsWrap.style.display = fields.length ? 'block' : 'none';
+        fields.forEach(function(field) {
+            var column = document.createElement('div');
+            column.className = 'col-md-6';
+            var label = document.createElement('label');
+            label.className = 'form-label';
+            label.textContent = field.label;
+            column.appendChild(label);
+            var input;
+            if (field.type === 'radio') {
+                column.className = 'col-12';
+                var radioGroup = document.createElement('div');
+                radioGroup.className = 'd-flex flex-wrap gap-3';
+                (field.options || []).forEach(function(value) {
+                    var wrap = document.createElement('label'); wrap.className = 'form-check form-check-inline';
+                    var radio = document.createElement('input'); radio.type = 'radio'; radio.className = 'form-check-input'; radio.name = 'document_inputs[' + field.key + ']'; radio.value = value; radio.dataset.documentInput = 'true';
+                    radio.addEventListener('change', function() { if (templateSelect.value) loadPreview(templateSelect.value); });
+                    var text = document.createElement('span'); text.className = 'form-check-label'; text.textContent = value;
+                    wrap.appendChild(radio); wrap.appendChild(text); radioGroup.appendChild(wrap);
+                });
+                column.appendChild(radioGroup);
+                inputsContainer.appendChild(column);
+                return;
+            } else if (field.type === 'select') {
+                input = document.createElement('select');
+                input.className = 'form-select';
+                var empty = document.createElement('option'); empty.value = ''; empty.textContent = '{{ __('Select...') }}'; input.appendChild(empty);
+                (field.options || []).forEach(function(value) { var item = document.createElement('option'); item.value = value; item.textContent = value; input.appendChild(item); });
+            } else {
+                input = document.createElement('input');
+                input.type = field.type === 'date' ? 'date' : 'text';
+                input.className = 'form-control';
+            }
+            input.name = 'document_inputs[' + field.key + ']';
+            input.dataset.documentInput = 'true';
+            input.addEventListener('change', function() { if (templateSelect.value) loadPreview(templateSelect.value); });
+            input.addEventListener('input', function() { if (templateSelect.value) loadPreview(templateSelect.value); });
+            column.appendChild(input);
+            inputsContainer.appendChild(column);
+        });
+        if (masterEditButton) {
+            masterEditButton.href = option.dataset.editUrl;
+            masterEditButton.classList.remove('d-none');
+        }
     }
 
     // Close preview
@@ -281,6 +369,7 @@ document.addEventListener('DOMContentLoaded', function() {
             body: JSON.stringify({
                 template_id: templateId,
                 contractor_id: contractorSelect ? contractorSelect.value : null,
+                document_inputs: previewDocumentInputs(),
             })
         })
         .then(function(r) { return r.json(); })
@@ -292,6 +381,15 @@ document.addEventListener('DOMContentLoaded', function() {
             previewLoading.style.display = 'none';
             previewContent.innerHTML = '<div class="alert alert-danger">{{ __('Failed to load preview.') }}</div>';
         });
+    }
+
+    function previewDocumentInputs() {
+        var inputs = {};
+        document.querySelectorAll('[data-document-input="true"]').forEach(function(input) {
+            var match = input.name.match(/^document_inputs\[([^\]]+)\]$/);
+            if (match && (input.type !== 'radio' || input.checked)) inputs[match[1]] = input.value;
+        });
+        return inputs;
     }
 });
 </script>

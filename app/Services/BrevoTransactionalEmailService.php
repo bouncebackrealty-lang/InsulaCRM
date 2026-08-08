@@ -7,6 +7,7 @@ use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -191,6 +192,10 @@ class BrevoTransactionalEmailService
     {
         $property = $deal->lead?->property;
         $photoUrl = $deal->lead?->photos->first()?->url;
+
+        $photoGalleryUrl = $deal->lead
+            ? URL::temporarySignedRoute('buyer-photo-gallery.show', now()->addDays(30), ['lead' => $deal->lead->id])
+            : null;
         $dealType = $this->dealTypeLabel($deal);
         $askingPrice = $property?->asking_price;
         $arv = $property?->after_repair_value;
@@ -204,6 +209,7 @@ class BrevoTransactionalEmailService
             'beds' => $property?->bedrooms !== null ? (string) $property->bedrooms : null,
             'deal_type' => $dealType,
             'photo_url' => $photoUrl,
+            'photo_gallery_url' => $photoGalleryUrl,
             'repair_level' => $this->repairLevel($deal),
             'sqft' => $property?->square_footage ? number_format((int) $property->square_footage) : null,
 
@@ -223,6 +229,7 @@ class BrevoTransactionalEmailService
             'MAO' => $this->currency($property?->mao),
             'CLOSING_DATE' => $deal->closing_date?->format('m/d/Y'),
             'PROPERTY_PHOTO_URL' => $photoUrl,
+            'PROPERTY_PHOTO_GALLERY_URL' => $photoGalleryUrl,
             'PHOTO_URL' => $photoUrl,
             'property_address' => $property?->address,
             'property_city' => $property?->city,
@@ -230,6 +237,7 @@ class BrevoTransactionalEmailService
             'property_zip' => $property?->zip_code,
             'property_full_address' => $property?->full_address,
             'property_photo_url' => $photoUrl,
+            'property_photo_gallery_url' => $photoGalleryUrl,
         ];
     }
 

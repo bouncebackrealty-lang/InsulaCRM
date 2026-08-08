@@ -442,7 +442,7 @@ class LeadController extends Controller
         }
         $photo->delete();
 
-        return redirect()->route('leads.show', $lead)
+        return redirect()->to(route('leads.show', $lead) . '#photos-section')
             ->with('success', 'Photo deleted.');
     }
 

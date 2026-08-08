@@ -10,6 +10,13 @@ class LenderLoanProgram extends Model
 {
     use HasFactory;
 
+    public const STANDARD_PROGRAMS = [
+        'Fix & Flip',
+        'Bridge',
+        'DSCR',
+        'New Construction',
+    ];
+
     protected $fillable = [
         'tenant_id',
         'lender_id',

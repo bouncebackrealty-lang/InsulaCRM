@@ -13,10 +13,10 @@ class DocumentMergeService
     /**
      * Replace all {{merge.field}} placeholders with actual values from the deal.
      */
-    public function merge(string $template, Deal $deal, ?Contractor $contractor = null): string
+    public function merge(string $template, Deal $deal, ?Contractor $contractor = null, array $documentInputs = []): string
     {
         // Eager load relationships
-        $deal->loadMissing(['lead.property', 'tenant']);
+        $deal->loadMissing(['lead.property', 'tenant', 'lenders.lender', 'titleCompany']);
 
         // Resolve the best buyer match for the deal
         $buyerMatch = $deal->buyerMatches()->with('buyer')->orderByDesc('match_score')->first();
@@ -28,6 +28,15 @@ class DocumentMergeService
 
         // Build the merge data map
         $data = $this->buildMergeData($deal, $lead, $property, $buyer, $tenant, $contractor);
+
+
+        $data['input.closing_attorney'] = trim(implode(' ', array_filter([
+            $data['title_company.closing_attorney'] ?? '',
+            $data['title_company.name'] ?? '',
+        ])));
+        foreach ($documentInputs as $key => $value) {
+            $data['input.' . $key] = is_array($value) ? implode(', ', $value) : (string) $value;
+        }
 
         // Replace all {{field}} placeholders
         $rendered = preg_replace_callback('/\{\{([a-z_.]+)\}\}/', function ($matches) use ($data) {
@@ -119,6 +128,11 @@ class DocumentMergeService
         $data['buyer.company'] = $buyer->company ?? '';
         $data['buyer.phone'] = $buyer->phone ?? '';
         $data['buyer.email'] = $buyer->email ?? '';
+        $data['buyer.address'] = $buyer->address ?? '';
+        $data['buyer.city'] = $buyer->city ?? '';
+        $data['buyer.state'] = $buyer->state ?? '';
+        $data['buyer.zip_code'] = $buyer->zip_code ?? '';
+        $data['buyer.full_address'] = $buyer?->full_address ?? '';
         $data['buyer.full_name'] = trim(($buyer->first_name ?? '') . ' ' . ($buyer->last_name ?? ''));
         $data['buyer.top_match'] = trim($buyer->company ?? '')
             ?: $data['buyer.full_name']
@@ -129,6 +143,20 @@ class DocumentMergeService
         $data['company.name'] = $tenant->name ?? '';
         $data['company.email'] = $tenant->email ?? '';
         $data['company.phone'] = $tenant->phone ?? '';
+
+        $lender = $deal->lenders->first()?->lender;
+        $data['lender.name'] = $lender?->name ?? '';
+        $data['lender.company'] = $lender?->company ?? '';
+        $data['lender.phone'] = $lender?->phone ?? '';
+        $data['lender.email'] = $lender?->email ?? '';
+
+        $titleCompany = $deal->titleCompany;
+        $data['title_company.name'] = $titleCompany?->name ?? '';
+        $data['title_company.closing_attorney'] = $titleCompany?->closing_attorney ?? '';
+        $data['title_company.address'] = $titleCompany?->address ?? '';
+        $data['title_company.full_address'] = $titleCompany?->full_address ?? '';
+        $data['title_company.phone'] = $titleCompany?->phone ?? '';
+        $data['title_company.email'] = $titleCompany?->email ?? '';
 
 
         $data['contractor.name'] = $contractor->name ?? '';
@@ -271,6 +299,8 @@ class DocumentMergeService
             'buyer.phone' => '(555) 987-6543',
             'buyer.email' => 'jane@doeinvestments.com',
             'buyer.full_name' => 'Jane Doe',
+            'buyer.address' => '456 Buyer Lane',
+            'buyer.full_address' => '456 Buyer Lane, Orlando, FL 32801',
 
             // Contractor
             'contractor.name' => 'Acme Renovations LLC',
@@ -285,6 +315,18 @@ class DocumentMergeService
             'company.name' => auth()->user()->tenant->name ?? 'Your Company',
             'company.email' => auth()->user()->tenant->email ?? 'info@company.com',
             'company.phone' => auth()->user()->tenant->phone ?? '(555) 000-0000',
+
+            // Selected lender / title company
+            'lender.name' => 'Sample Capital Funding',
+            'lender.company' => 'Sample Capital Funding LLC',
+            'lender.phone' => '(555) 777-0909',
+            'lender.email' => 'funding@example.com',
+            'title_company.name' => 'Sample Title Company',
+            'title_company.closing_attorney' => 'Alex Morgan',
+            'title_company.address' => '100 Closing Way',
+            'title_company.full_address' => '100 Closing Way, Orlando, FL 32801',
+            'title_company.phone' => '(555) 333-1212',
+            'title_company.email' => 'closing@example.com',
 
             // Dates
             'today' => now()->format('m/d/Y'),

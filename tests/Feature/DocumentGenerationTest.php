@@ -8,7 +8,11 @@ use App\Models\Buyer;
 use App\Models\DealBuyerMatch;
 use App\Models\DealContractor;
 use App\Models\DocumentTemplate;
+use App\Models\DealLender;
 use App\Models\GeneratedDocument;
+use App\Models\Lender;
+use App\Models\LenderLoanProgram;
+use App\Models\TitleCompany;
 use App\Services\DocumentMergeService;
 use Tests\TestCase;
 
@@ -178,6 +182,41 @@ class DocumentGenerationTest extends TestCase
             'BOUNCE BACK REALTY and/or its assigns',
             $service->merge('<p>{{buyer.top_match}}</p>', $dealWithoutMatch),
         );
+    }
+
+    public function test_document_merges_selected_lender_title_company_buyer_address_and_entry_values(): void
+    {
+        $this->actingAsAdmin();
+        $deal = $this->createDeal();
+        $buyer = Buyer::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'address' => '42 Buyer Way', 'city' => 'Atlanta', 'state' => 'GA', 'zip_code' => '30318',
+        ]);
+        DealBuyerMatch::create(['deal_id' => $deal->id, 'buyer_id' => $buyer->id, 'match_score' => 99]);
+        $titleCompany = TitleCompany::create(['tenant_id' => $this->tenant->id, 'name' => 'Peachtree Title', 'closing_attorney' => 'Avery Stone', 'address' => '10 Main St', 'city' => 'Atlanta', 'state' => 'GA', 'zip_code' => '30303']);
+        $deal->update(['title_company_id' => $titleCompany->id]);
+        $lender = Lender::create(['tenant_id' => $this->tenant->id, 'name' => 'Capital Funding']);
+        $program = LenderLoanProgram::create(['tenant_id' => $this->tenant->id, 'lender_id' => $lender->id, 'program_name' => 'Bridge']);
+        DealLender::create(['deal_id' => $deal->id, 'lender_id' => $lender->id, 'lender_loan_program_id' => $program->id]);
+        $template = DocumentTemplate::create([
+            'tenant_id' => $this->tenant->id, 'name' => 'Partner merge test', 'type' => 'other',
+            'input_fields' => [['key' => 'source_of_funds'], ['key' => 'printed_name']],
+            'content' => '<p>{{lender.name}} | {{title_company.closing_attorney}} | {{title_company.full_address}} | {{buyer.full_address}} | {{input.closing_attorney}} | {{input.source_of_funds}} | {{input.printed_name}}</p>',
+        ]);
+
+        $this->post(route('documents.store', $deal), [
+            'template_id' => $template->id,
+            'document_inputs' => ['source_of_funds' => 'Hard Money / Private Lender', 'printed_name' => 'Latanya White'],
+        ])->assertRedirect();
+
+        $content = GeneratedDocument::latest('id')->value('content');
+        $this->assertStringContainsString('Capital Funding', $content);
+        $this->assertStringContainsString('Avery Stone', $content);
+        $this->assertStringContainsString('Avery Stone Peachtree Title', $content);
+        $this->assertStringContainsString('10 Main St, Atlanta, GA 30303', $content);
+        $this->assertStringContainsString('42 Buyer Way, Atlanta, GA 30318', $content);
+        $this->assertStringContainsString('Hard Money / Private Lender', $content);
+        $this->assertStringContainsString('Latanya White', $content);
     }
 
     public function test_investor_packet_uses_saved_comparable_sale_data_for_arv_and_comp_rows(): void

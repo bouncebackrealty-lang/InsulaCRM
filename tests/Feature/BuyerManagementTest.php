@@ -25,6 +25,10 @@ class BuyerManagementTest extends TestCase
             'company' => 'Invest Corp',
             'phone' => '555-0200',
             'email' => 'jane@invest.com',
+            'address' => '123 Buyer Lane',
+            'city' => 'Atlanta',
+            'state' => 'GA',
+            'zip_code' => '30318',
             'max_purchase_price' => 500000,
             'preferred_property_types' => ['single_family', 'multi_family'],
             'preferred_zip_codes' => ['33101', '33102', '33103'],
@@ -36,6 +40,8 @@ class BuyerManagementTest extends TestCase
             'first_name' => 'Jane',
             'last_name' => 'Investor',
             'tenant_id' => $this->tenant->id,
+            'address' => '123 Buyer Lane',
+            'zip_code' => '30318',
         ]);
     }
 

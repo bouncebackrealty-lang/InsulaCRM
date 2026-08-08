@@ -60,6 +60,7 @@ class Deal extends Model
     protected $fillable = [
         'tenant_id',
         'lead_id',
+        'title_company_id',
         'agent_id',
         'title',
         'stage',
@@ -166,6 +167,11 @@ class Deal extends Model
     public function lenders()
     {
         return $this->hasMany(DealLender::class);
+    }
+
+    public function titleCompany()
+    {
+        return $this->belongsTo(TitleCompany::class);
     }
 
     public function rehabLineItems()

@@ -17,6 +17,7 @@ use App\Models\LenderLoanProgram;
 use App\Models\RehabLineItem;
 use App\Models\Role;
 use App\Models\TransactionChecklist;
+use App\Models\TitleCompany;
 use App\Models\User;
 use App\Notifications\BuyerMatchFound;
 use App\Notifications\DealStageChanged as DealStageChangedNotification;
@@ -261,6 +262,7 @@ class DealController extends Controller
             'contractors.contractor',
             'lenders.lender',
             'lenders.loanProgram',
+            'titleCompany',
             'rehabLineItems.contractor',
         ]);
 
@@ -283,8 +285,9 @@ class DealController extends Controller
             ->get()
             ->sortBy(fn ($program) => ($program->lender->name ?? '') . ' ' . $program->program_name);
         $rehabContractors = Contractor::orderBy('name')->get();
+        $titleCompanies = TitleCompany::orderBy('name')->get();
 
-        return view('deals.show', compact('deal', 'availableContractors', 'availableLoanPrograms', 'rehabContractors'));
+        return view('deals.show', compact('deal', 'availableContractors', 'availableLoanPrograms', 'rehabContractors', 'titleCompanies'));
     }
 
     public function update(DealRequest $request, Deal $deal)
@@ -292,6 +295,10 @@ class DealController extends Controller
         $this->authorize('update', $deal);
 
         $data = $request->validated();
+
+        if (array_key_exists('title_company_id', $data) && $data['title_company_id']) {
+            abort_unless(TitleCompany::find($data['title_company_id']), 422);
+        }
 
         $effectiveDealType = $data['deal_type'] ?? $deal->deal_type;
         if ($effectiveDealType !== 'wholesale') {

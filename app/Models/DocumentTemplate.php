@@ -22,6 +22,7 @@ class DocumentTemplate extends Model
         'type',
         'content',
         'merge_fields',
+        'input_fields',
         'is_default',
     ];
 
@@ -29,6 +30,7 @@ class DocumentTemplate extends Model
     {
         return [
             'merge_fields' => 'array',
+            'input_fields' => 'array',
             'is_default' => 'boolean',
         ];
     }
@@ -136,6 +138,8 @@ class DocumentTemplate extends Model
                 'buyer.top_match' => __($isRE ? 'Top Matched Client' : 'Top Matched Buyer'),
                 'buyer.phone' => __($isRE ? 'Client Phone' : 'Buyer Phone'),
                 'buyer.email' => __($isRE ? 'Client Email' : 'Buyer Email'),
+                'buyer.address' => __($isRE ? 'Client Address' : 'Buyer Address'),
+                'buyer.full_address' => __($isRE ? 'Client Full Address' : 'Buyer Full Address'),
             ],
             __('Contractor') => [
                 'contractor.name' => __('Contractor Name'),
@@ -150,6 +154,20 @@ class DocumentTemplate extends Model
                 'company.name' => __('Company Name'),
                 'company.email' => __('Company Email'),
                 'company.phone' => __('Company Phone'),
+            ],
+            __('Selected Lender') => [
+                'lender.name' => __('Lender Name'),
+                'lender.company' => __('Lender Company'),
+                'lender.phone' => __('Lender Phone'),
+                'lender.email' => __('Lender Email'),
+            ],
+            __('Title Company / Closing Attorney') => [
+                'title_company.name' => __('Title Company Name'),
+                'title_company.closing_attorney' => __('Closing Attorney'),
+                'title_company.address' => __('Title Company Address'),
+                'title_company.full_address' => __('Title Company Full Address'),
+                'title_company.phone' => __('Title Company Phone'),
+                'title_company.email' => __('Title Company Email'),
             ],
             __('Dates') => [
                 'today' => __('Today (short)'),

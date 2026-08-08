@@ -238,6 +238,12 @@
                                 <span class="nav-link-title">{{ __('Lenders') }}</span>
                             </a>
                         </li>
+                        <li class="nav-item {{ request()->is('title-companies*') ? 'active' : '' }}">
+                            <a class="nav-link" href="{{ route('title-companies.index') }}">
+                                <span class="nav-link-icon"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="M3 21h18"/><path d="M4 10h16"/><path d="M6 10v11"/><path d="M18 10v11"/><path d="M12 10v11"/><path d="M3 10l9 -6l9 6"/></svg></span>
+                                <span class="nav-link-title">{{ __('Title Companies') }}</span>
+                            </a>
+                        </li>
                         @endif
 
                         @unless(auth()->user()->isFieldScout())

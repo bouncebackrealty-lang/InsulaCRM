@@ -86,7 +86,10 @@
                                     @csrf
                                     @method('PUT')
                                 </form>
-                                <input form="{{ $programFormId }}" type="text" name="program_name" class="form-control form-control-sm" value="{{ old('program_name', $program->program_name) }}" required>
+                                <select form="{{ $programFormId }}" name="program_name" class="form-select form-select-sm" required>
+                                    @if(!in_array($program->program_name, \App\Models\LenderLoanProgram::STANDARD_PROGRAMS, true))<option selected value="{{ $program->program_name }}">{{ $program->program_name }}</option>@endif
+                                    @foreach(\App\Models\LenderLoanProgram::STANDARD_PROGRAMS as $programName)<option value="{{ $programName }}" {{ old('program_name', $program->program_name) === $programName ? 'selected' : '' }}>{{ $programName }}</option>@endforeach
+                                </select>
                             </td>
                             <td><input form="{{ $programFormId }}" type="number" name="interest_rate" class="form-control form-control-sm" value="{{ $program->interest_rate }}" step="0.01" min="0" max="100"></td>
                             <td><input form="{{ $programFormId }}" type="number" name="points" class="form-control form-control-sm" value="{{ $program->points }}" step="0.01" min="0" max="100"></td>
@@ -122,7 +125,10 @@
                     @csrf
                     <div class="col-md-3">
                         <label class="form-label required">{{ __('Program Name') }}</label>
-                        <input type="text" name="program_name" class="form-control @error('program_name') is-invalid @enderror" value="{{ old('program_name') }}" required>
+                        <select name="program_name" class="form-select @error('program_name') is-invalid @enderror" required>
+                            <option value="">{{ __('Select program...') }}</option>
+                            @foreach(\App\Models\LenderLoanProgram::STANDARD_PROGRAMS as $programName)<option value="{{ $programName }}" {{ old('program_name') === $programName ? 'selected' : '' }}>{{ $programName }}</option>@endforeach
+                        </select>
                         @error('program_name') <div class="invalid-feedback">{{ $message }}</div> @enderror
                     </div>
                     <div class="col-md-1">

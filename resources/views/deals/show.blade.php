@@ -927,6 +927,16 @@
             <div class="card-body">
                 <form id="deal-edit-form">
                     <div class="mb-2">
+                        <label class="form-label">{{ __('Title Company / Closing Attorney') }}</label>
+                        <select name="title_company_id" class="form-select form-select-sm">
+                            <option value="">{{ __('Not selected') }}</option>
+                            @foreach($titleCompanies as $titleCompany)
+                                <option value="{{ $titleCompany->id }}" {{ $deal->title_company_id === $titleCompany->id ? 'selected' : '' }}>{{ $titleCompany->name }}{{ $titleCompany->closing_attorney ? ' — '.$titleCompany->closing_attorney : '' }}</option>
+                            @endforeach
+                        </select>
+                        <div class="form-hint">{{ __('Select once to use the company and attorney in generated documents.') }} <a href="{{ route('title-companies.create') }}">{{ __('Add new') }}</a></div>
+                    </div>
+                    <div class="mb-2">
                         <label class="form-label">{{ __('Deal Type') }}</label>
                         <select name="deal_type" class="form-select form-select-sm">
                             <option value="">{{ __('Not Set') }}</option>

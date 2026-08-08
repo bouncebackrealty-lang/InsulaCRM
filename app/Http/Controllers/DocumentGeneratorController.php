@@ -28,7 +28,7 @@ class DocumentGeneratorController extends Controller
      */
     public function create(Deal $deal)
     {
-        $deal->loadMissing(['lead.property', 'tenant', 'buyerMatches.buyer', 'contractors.contractor']);
+        $deal->loadMissing(['lead.property', 'tenant', 'buyerMatches.buyer', 'contractors.contractor', 'lenders.lender', 'titleCompany']);
 
         $templates = DocumentTemplate::orderBy('name')->get();
 
@@ -58,7 +58,12 @@ class DocumentGeneratorController extends Controller
         $template = DocumentTemplate::findOrFail($request->template_id);
         $deal->loadMissing(['lead.property', 'tenant', 'buyerMatches.buyer', 'contractors.contractor']);
 
-        $rendered = $this->mergeService->merge($template->content, $deal, $this->selectedContractor($request, $deal));
+        $rendered = $this->mergeService->merge(
+            $template->content,
+            $deal,
+            $this->selectedContractor($request, $deal),
+            $this->documentInputs($request, $template),
+        );
 
         return response()->json([
             'html' => $rendered,
@@ -79,7 +84,12 @@ class DocumentGeneratorController extends Controller
         $template = DocumentTemplate::findOrFail($request->template_id);
         $deal->loadMissing(['lead.property', 'tenant', 'buyerMatches.buyer', 'contractors.contractor']);
 
-        $rendered = $this->mergeService->merge($template->content, $deal, $this->selectedContractor($request, $deal));
+        $rendered = $this->mergeService->merge(
+            $template->content,
+            $deal,
+            $this->selectedContractor($request, $deal),
+            $this->documentInputs($request, $template),
+        );
 
         $rendered = $this->sanitizeDocumentHtml($rendered);
 
@@ -350,5 +360,17 @@ class DocumentGeneratorController extends Controller
         $html = preg_replace('/<script\b[^>]*>.*?<\/script>/is', '', $html);
 
         return preg_replace('/\bon\w+\s*=\s*["\'][^"\']*["\']/i', '', $html);
+    }
+
+
+    private function documentInputs(Request $request, DocumentTemplate $template): array
+    {
+        $configured = collect($template->input_fields ?? [])->pluck('key')->filter()->all();
+        $submitted = (array) $request->input('document_inputs', []);
+
+        return array_filter(
+            array_intersect_key($submitted, array_flip($configured)),
+            static fn ($value) => $value !== null && $value !== ''
+        );
     }
 }

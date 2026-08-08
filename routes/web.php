@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\BuyerController;
 use App\Http\Controllers\BuyerNotificationController;
+use App\Http\Controllers\BuyerPhotoGalleryController;
 use App\Http\Controllers\ContractorController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DncController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\DealController;
 use App\Http\Controllers\LeadController;
 use App\Http\Controllers\LenderController;
+use App\Http\Controllers\TitleCompanyController;
 use App\Http\Controllers\ListController;
 use App\Http\Controllers\PluginController;
 use App\Http\Controllers\PropertyController;
@@ -92,6 +94,9 @@ Route::get('/p/{slug}', [BuyerPortalController::class, 'show'])->name('buyer-por
 Route::post('/p/{slug}/register', [BuyerPortalController::class, 'register'])->middleware('throttle:10,1')->name('buyer-portal.register');
 Route::get('/p/{slug}/registered', [BuyerPortalController::class, 'registered'])->name('buyer-portal.registered');
 Route::get('/p/{slug}/properties', [BuyerPortalController::class, 'properties'])->name('buyer-portal.properties');
+Route::get('/buyer-photo-gallery/{lead}', [BuyerPhotoGalleryController::class, 'show'])
+    ->middleware('signed')
+    ->name('buyer-photo-gallery.show');
 
 // Offline fallback (PWA)
 Route::get('/offline', fn () => view('offline'))->name('offline');
@@ -385,6 +390,7 @@ Route::middleware(['auth', 'tenant', 'require2fa'])->group(function () {
         Route::put('/lender-programs/{program}', [LenderController::class, 'updateProgram'])->name('lenders.programs.update');
         Route::delete('/lender-programs/{program}', [LenderController::class, 'destroyProgram'])->name('lenders.programs.destroy');
         Route::resource('lenders', LenderController::class);
+        Route::resource('title-companies', TitleCompanyController::class);
     });
 
     // ── Goals: all except field_scout ────────────────────

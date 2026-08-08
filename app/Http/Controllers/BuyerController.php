@@ -199,6 +199,10 @@ class BuyerController extends Controller
             'company'            => null,
             'phone'              => null,
             'email'              => null,
+            'address'            => null,
+            'city'               => null,
+            'state'              => null,
+            'zip_code'           => null,
             'max_purchase_price' => null,
         ];
 
@@ -238,6 +242,10 @@ class BuyerController extends Controller
                 'company'            => $columnMap['company'] !== null ? trim($row[$columnMap['company']] ?? '') : null,
                 'phone'              => $columnMap['phone'] !== null ? trim($row[$columnMap['phone']] ?? '') : null,
                 'email'              => $columnMap['email'] !== null ? trim($row[$columnMap['email']] ?? '') : null,
+                'address'            => $columnMap['address'] !== null ? trim($row[$columnMap['address']] ?? '') : null,
+                'city'               => $columnMap['city'] !== null ? trim($row[$columnMap['city']] ?? '') : null,
+                'state'              => $columnMap['state'] !== null ? trim($row[$columnMap['state']] ?? '') : null,
+                'zip_code'           => $columnMap['zip_code'] !== null ? trim($row[$columnMap['zip_code']] ?? '') : null,
                 'max_purchase_price' => $columnMap['max_purchase_price'] !== null && isset($row[$columnMap['max_purchase_price']]) && is_numeric(trim($row[$columnMap['max_purchase_price']])) ? (float) trim($row[$columnMap['max_purchase_price']]) : null,
             ]);
 
@@ -285,6 +293,7 @@ class BuyerController extends Controller
             $handle = fopen('php://output', 'w');
             fputcsv($handle, [
                 __('First Name'), __('Last Name'), __('Company'), __('Phone'), __('Email'),
+                __('Address'), __('City'), __('State'), __('Zip Code'),
                 __('Max Purchase Price'), __('Preferred Property Types'), __('Preferred States'), __('Preferred Zip Codes'),
             ]);
             foreach ($buyers as $buyer) {
@@ -294,6 +303,10 @@ class BuyerController extends Controller
                     $buyer->company,
                     $buyer->phone,
                     $buyer->email,
+                    $buyer->address,
+                    $buyer->city,
+                    $buyer->state,
+                    $buyer->zip_code,
                     $buyer->max_purchase_price,
                     is_array($buyer->preferred_property_types) ? implode(', ', $buyer->preferred_property_types) : $buyer->preferred_property_types,
                     is_array($buyer->preferred_states) ? implode(', ', $buyer->preferred_states) : $buyer->preferred_states,
@@ -307,4 +320,3 @@ class BuyerController extends Controller
     }
 
 }
-
