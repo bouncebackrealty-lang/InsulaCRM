@@ -335,7 +335,7 @@ class DocumentGeneratorController extends Controller
 
     private function selectedContractor(Request $request, Deal $deal, ?DocumentTemplate $template = null): ?\App\Models\Contractor
     {
-        if ($template?->type === 'loi') {
+        if (in_array($template?->type, ['loi', 'purchase_agreement'], true)) {
             return null;
         }
 

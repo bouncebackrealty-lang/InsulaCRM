@@ -158,6 +158,22 @@ class DocumentGenerationTest extends TestCase
         $this->assertStringNotContainsString('$$170,000.00', $rendered);
     }
 
+    public function test_document_date_input_merges_as_month_day_year(): void
+    {
+        $this->actingAsAdmin();
+        $deal = $this->createDeal();
+
+        $rendered = app(DocumentMergeService::class)->merge(
+            '<p>Top date: {{input.document_date}}</p><p>Signature date: {{input.document_date}}</p>',
+            $deal,
+            null,
+            ['document_date' => '2026-08-10'],
+        );
+
+        $this->assertSame(2, substr_count($rendered, '08/10/2026'));
+        $this->assertStringNotContainsString('2026-08-10', $rendered);
+    }
+
     public function test_loi_buyer_line_uses_the_company_instead_of_a_matched_buyer(): void
     {
         $this->actingAsAdmin();
@@ -244,6 +260,114 @@ HTML,
         $this->assertStringContainsString('{{input.document_date}}', $buyerCell);
         $this->assertStringNotContainsString('{{input.printed_name}}', $sellerContent);
         $this->assertStringNotContainsString('{{input.document_date}}', $sellerContent);
+
+    }
+
+    public function test_purchase_agreement_repair_moves_title_company_and_signature_fields_into_the_body(): void
+    {
+        $this->actingAsAdmin();
+
+        $template = DocumentTemplate::create([
+            'tenant_id' => $this->tenant->id,
+            'name' => '1A-02-Purchase Agreement',
+            'type' => 'purchase_agreement',
+            'input_fields' => [],
+            'content' => <<<'HTML'
+<html><head><style>.sig-line { flex: 1; border-bottom: 1px solid #000000; height: 1px; margin-bottom: 2px; }</style></head><body>
+<p><strong>Title Company:</strong> <span class="inline-line"></span></p>
+<p><strong>Title Company Address:</strong> <span class="inline-line"></span></p>
+<table class="signature-table"><tr><td class="signature-cell"><p><strong>SELLER(S):</strong></p>
+<div class="signature-field"><span class="signature-label">Printed Name:</span><span class="sig-line"></span></div>
+<div class="signature-field"><span class="signature-label">Date:</span><span class="sig-line"></span></div>
+</td><td class="signature-space"></td><td class="signature-cell"><p><strong>BUYER:</strong> BOUNCE BACK REALTY</p>
+<div class="signature-field"><span class="signature-label">Printed Name:</span><span class="sig-line"></span></div>
+<div class="signature-field"><span class="signature-label">Date:</span><span class="sig-line"></span></div>
+</td></tr></table>
+<div data-document-entry-fields="true"><p><strong>DOCUMENT DETAILS</strong></p>
+<p><strong>Title Company:</strong> {{title_company.name}}</p>
+<p><strong>Title Company Address:</strong> {{title_company.full_address}}</p>
+<p><strong>Printed Name:</strong> {{input.printed_name}}</p>
+<p><strong>Date:</strong> {{input.document_date}}</p></div>
+</body></html>
+HTML,
+        ]);
+
+        $migration = require database_path('migrations/2026_08_10_000003_fix_purchase_agreement_template.php');
+        $migration->up();
+        $content = $template->fresh()->content;
+
+        $this->assertStringContainsString('{{title_company.name}}', $content);
+        $this->assertStringContainsString('{{title_company.full_address}}', $content);
+        $this->assertStringContainsString('{{input.printed_name}}', $content);
+        $this->assertStringContainsString('{{input.document_date}}', $content);
+        $this->assertStringContainsString('min-height: 18px; line-height: 18px;', $content);
+        $this->assertStringNotContainsString('height: 1px;', $content);
+        $this->assertStringNotContainsString('data-document-entry-fields', $content);
+
+        $buyerCellStart = strpos($content, '<strong>BUYER:');
+        $buyerCellEnd = strpos($content, '</td>', $buyerCellStart);
+        $buyerCell = substr($content, $buyerCellStart, $buyerCellEnd - $buyerCellStart);
+        $sellerContent = substr($content, 0, $buyerCellStart);
+
+        $this->assertStringContainsString('{{input.printed_name}}', $buyerCell);
+        $this->assertStringContainsString('{{input.document_date}}', $buyerCell);
+        $this->assertStringNotContainsString('{{input.printed_name}}', $sellerContent);
+        $this->assertStringNotContainsString('{{input.document_date}}', $sellerContent);
+
+        $deal = $this->createDeal();
+        $titleCompany = TitleCompany::create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'Peachtree Title',
+            'address' => '10 Main St',
+            'city' => 'Atlanta',
+            'state' => 'GA',
+            'zip_code' => '30303',
+        ]);
+        $deal->update(['title_company_id' => $titleCompany->id]);
+
+        $rendered = app(DocumentMergeService::class)->merge(
+            $content,
+            $deal,
+            null,
+            ['printed_name' => 'Latanya White', 'document_date' => '2026-08-10'],
+        );
+
+        $this->assertStringContainsString('Peachtree Title', $rendered);
+        $this->assertStringContainsString('10 Main St, Atlanta, GA 30303', $rendered);
+        $this->assertStringContainsString('Latanya White', $rendered);
+        $this->assertStringContainsString('08/10/2026', $rendered);
+        $this->assertStringNotContainsString('2026-08-10', $rendered);
+        $this->assertStringNotContainsString('data-document-entry-fields', $rendered);
+    }
+
+    public function test_purchase_agreement_does_not_use_contractor_data(): void
+    {
+        $this->actingAsAdmin();
+
+        $deal = $this->createDeal();
+        $contractor = Contractor::create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'Should Not Appear In PSA',
+        ]);
+        DealContractor::create([
+            'deal_id' => $deal->id,
+            'contractor_id' => $contractor->id,
+        ]);
+        $template = DocumentTemplate::create([
+            'tenant_id' => $this->tenant->id,
+            'name' => '1A-02-Purchase Agreement',
+            'type' => 'purchase_agreement',
+            'content' => '<p>{{contractor.name}}</p><p>{{company.name}} and/or its assigns</p>',
+        ]);
+
+        $this->post(route('documents.store', $deal), [
+            'template_id' => $template->id,
+            'contractor_id' => $contractor->id,
+        ])->assertRedirect();
+
+        $content = GeneratedDocument::latest('id')->value('content');
+        $this->assertStringNotContainsString('Should Not Appear In PSA', $content);
+        $this->assertStringContainsString('and/or its assigns', $content);
     }
 
     public function test_document_merges_selected_lender_title_company_buyer_address_and_entry_values(): void

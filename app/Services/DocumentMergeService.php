@@ -35,6 +35,14 @@ class DocumentMergeService
             $data['title_company.name'] ?? '',
         ])));
         foreach ($documentInputs as $key => $value) {
+            if ($key === 'document_date' && !is_array($value) && $value !== '') {
+                try {
+                    $value = Carbon::parse($value)->format('m/d/Y');
+                } catch (\Exception $e) {
+
+                }
+            }
+
             $data['input.' . $key] = is_array($value) ? implode(', ', $value) : (string) $value;
         }
 

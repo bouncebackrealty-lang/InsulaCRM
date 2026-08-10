@@ -356,11 +356,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!contractorFieldWrap) return;
 
         var selectedOption = templateSelect.options[templateSelect.selectedIndex];
-        var isLetterOfIntent = selectedOption && selectedOption.dataset.type === 'loi';
+        var isAcquisitionAgreement = selectedOption
+            && ['loi', 'purchase_agreement'].indexOf(selectedOption.dataset.type) !== -1;
 
-        contractorFieldWrap.style.display = templateSelect.value && !isLetterOfIntent ? 'block' : 'none';
+        contractorFieldWrap.style.display = templateSelect.value && !isAcquisitionAgreement ? 'block' : 'none';
 
-        if (isLetterOfIntent && contractorSelect) {
+        if (isAcquisitionAgreement && contractorSelect) {
             contractorSelect.value = '';
         }
     }
