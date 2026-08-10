@@ -240,6 +240,8 @@ HTML,
         $signatureMigration->up();
         $layoutMigration = require database_path('migrations/2026_08_10_000002_align_letter_of_intent_signature_values.php');
         $layoutMigration->up();
+        $closingAttorneyMigration = require database_path('migrations/2026_08_10_000005_align_letter_of_intent_closing_attorney.php');
+        $closingAttorneyMigration->up();
         $content = $template->fresh()->content;
 
         $this->assertStringContainsString('{{input.closing_attorney}}', $content);
@@ -250,6 +252,10 @@ HTML,
         $this->assertStringNotContainsString('{{buyer.top_match}}', $content);
         $this->assertStringContainsString('min-height: 18px; line-height: 18px;', $content);
         $this->assertStringNotContainsString('height: 1px;', $content);
+        $this->assertStringContainsString('class="document-field"', $content);
+        $this->assertStringContainsString('class="document-field-label">Closing Attorney / Title Company:', $content);
+        $this->assertStringContainsString('class="inline-line document-field-value">{{input.closing_attorney}}</span>', $content);
+        $this->assertStringContainsString('white-space: nowrap;', $content);
 
         $buyerCellStart = strpos($content, '<strong>BUYER:');
         $buyerCellEnd = strpos($content, '</td>', $buyerCellStart);
@@ -368,6 +374,69 @@ HTML,
         $content = GeneratedDocument::latest('id')->value('content');
         $this->assertStringNotContainsString('Should Not Appear In PSA', $content);
         $this->assertStringContainsString('and/or its assigns', $content);
+    }
+
+    public function test_seller_disclosure_repair_moves_fields_into_the_buyer_signature_block(): void
+    {
+        $this->actingAsAdmin();
+
+        $template = DocumentTemplate::create([
+            'tenant_id' => $this->tenant->id,
+            'name' => '1A-03-Seller Disclosure',
+            'type' => 'other',
+            'input_fields' => [
+                ['key' => 'printed_name', 'label' => 'Printed Name (Bounce Back Realty)', 'type' => 'text'],
+                ['key' => 'document_date', 'label' => 'Document Date', 'type' => 'date'],
+            ],
+            'content' => <<<'HTML'
+<html><head><style>.sig-line { flex: 1; border-bottom: 1px solid #000000; height: 1px; margin-bottom: 2px; }</style></head><body>
+<h3>SELLER DISCLOSURE ACKNOWLEDGMENT</h3>
+<table class="signature-table"><tr><td class="signature-cell"><p><strong>SELLER:</strong></p>
+<div class="signature-field"><span class="signature-label">Signature:</span><span class="sig-line"></span></div>
+<div class="signature-field"><span class="signature-label">Printed Name:</span><span class="sig-line"></span></div>
+<div class="signature-field"><span class="signature-label">Date:</span><span class="sig-line"></span></div>
+</td><td class="signature-space"></td><td class="signature-cell"><p><strong>BUYER:</strong> BOUNCE BACK REALTY</p>
+<div class="signature-field"><span class="signature-label">Signature:</span><span class="sig-line"></span></div>
+<div class="signature-field"><span class="signature-label">Printed Name:</span><span class="sig-line"></span></div>
+<div class="signature-field"><span class="signature-label">Date:</span><span class="sig-line"></span></div>
+</td></tr></table>
+<div data-document-entry-fields="true"><p><strong>DOCUMENT DETAILS</strong></p>
+<p><strong>Printed Name:</strong> {{input.printed_name}}</p>
+<p><strong>Date:</strong> {{input.document_date}}</p></div>
+</body></html>
+HTML,
+        ]);
+
+        $migration = require database_path('migrations/2026_08_10_000004_fix_seller_disclosure_template.php');
+        $migration->up();
+        $content = $template->fresh()->content;
+
+        $this->assertStringContainsString('{{input.printed_name}}', $content);
+        $this->assertStringContainsString('{{input.document_date}}', $content);
+        $this->assertStringNotContainsString('data-document-entry-fields', $content);
+        $this->assertStringContainsString('min-height: 18px; line-height: 18px;', $content);
+        $this->assertStringNotContainsString('height: 1px;', $content);
+
+        $buyerCellStart = strpos($content, '<strong>BUYER:');
+        $buyerCellEnd = strpos($content, '</td>', $buyerCellStart);
+        $buyerCell = substr($content, $buyerCellStart, $buyerCellEnd - $buyerCellStart);
+        $sellerContent = substr($content, 0, $buyerCellStart);
+
+        $this->assertStringContainsString('{{input.printed_name}}', $buyerCell);
+        $this->assertStringContainsString('{{input.document_date}}', $buyerCell);
+        $this->assertStringNotContainsString('{{input.printed_name}}', $sellerContent);
+        $this->assertStringNotContainsString('{{input.document_date}}', $sellerContent);
+
+        $rendered = app(DocumentMergeService::class)->merge(
+            $content,
+            $this->createDeal(),
+            null,
+            ['printed_name' => 'Latanya White', 'document_date' => '2026-08-09'],
+        );
+
+        $this->assertStringContainsString('Latanya White', $rendered);
+        $this->assertStringContainsString('08/09/2026', $rendered);
+        $this->assertStringNotContainsString('data-document-entry-fields', $rendered);
     }
 
     public function test_document_merges_selected_lender_title_company_buyer_address_and_entry_values(): void
