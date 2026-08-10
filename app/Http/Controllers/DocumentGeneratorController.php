@@ -61,7 +61,7 @@ class DocumentGeneratorController extends Controller
         $rendered = $this->mergeService->merge(
             $template->content,
             $deal,
-            $this->selectedContractor($request, $deal),
+            $this->selectedContractor($request, $deal, $template),
             $this->documentInputs($request, $template),
         );
 
@@ -87,7 +87,7 @@ class DocumentGeneratorController extends Controller
         $rendered = $this->mergeService->merge(
             $template->content,
             $deal,
-            $this->selectedContractor($request, $deal),
+            $this->selectedContractor($request, $deal, $template),
             $this->documentInputs($request, $template),
         );
 
@@ -333,8 +333,12 @@ class DocumentGeneratorController extends Controller
         return response($printHtml);
     }
 
-    private function selectedContractor(Request $request, Deal $deal): ?\App\Models\Contractor
+    private function selectedContractor(Request $request, Deal $deal, ?DocumentTemplate $template = null): ?\App\Models\Contractor
     {
+        if ($template?->type === 'loi') {
+            return null;
+        }
+
         if (! $request->filled('contractor_id')) {
             $attachedContractors = $deal->contractors
                 ->map(fn ($dealContractor) => $dealContractor->contractor)

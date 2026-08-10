@@ -66,7 +66,7 @@
                         </div>
                     </div>
                     @if($contractors->isNotEmpty())
-                    <div class="mb-3">
+                    <div class="mb-3" id="contractor-field-wrap" style="display:none;">
                         <label class="form-label">{{ __('Contractor for this document') }} <small class="text-secondary">({{ __('optional') }})</small></label>
                         <select name="contractor_id" id="contractor-select" class="form-select">
                             <option value="">{{ __('No contractor information') }}</option>
@@ -263,10 +263,12 @@ document.addEventListener('DOMContentLoaded', function() {
     var previewLoading = document.getElementById('preview-loading');
     var previewContent = document.getElementById('preview-content');
     var contractorSelect = document.getElementById('contractor-select');
+    var contractorFieldWrap = document.getElementById('contractor-field-wrap');
     var inputsWrap = document.getElementById('document-inputs-wrap');
     var inputsContainer = document.getElementById('document-inputs');
     var masterEditButton = document.getElementById('edit-master-template-btn');
     var csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+    var previewRequestId = 0;
 
     // Enable/disable buttons on template select
     templateSelect.addEventListener('change', function() {
@@ -276,10 +278,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (hasValue) {
             renderDocumentInputs(this.options[this.selectedIndex]);
+            updateContractorVisibility();
             loadPreview(this.value);
         } else {
             inputsWrap.style.display = 'none';
             inputsContainer.innerHTML = '';
+            if (contractorFieldWrap) contractorFieldWrap.style.display = 'none';
             if (masterEditButton) masterEditButton.classList.add('d-none');
         }
     });
@@ -339,7 +343,6 @@ document.addEventListener('DOMContentLoaded', function() {
             input.name = 'document_inputs[' + field.key + ']';
             input.dataset.documentInput = 'true';
             input.addEventListener('change', function() { if (templateSelect.value) loadPreview(templateSelect.value); });
-            input.addEventListener('input', function() { if (templateSelect.value) loadPreview(templateSelect.value); });
             column.appendChild(input);
             inputsContainer.appendChild(column);
         });
@@ -349,15 +352,29 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    function updateContractorVisibility() {
+        if (!contractorFieldWrap) return;
+
+        var selectedOption = templateSelect.options[templateSelect.selectedIndex];
+        var isLetterOfIntent = selectedOption && selectedOption.dataset.type === 'loi';
+
+        contractorFieldWrap.style.display = templateSelect.value && !isLetterOfIntent ? 'block' : 'none';
+
+        if (isLetterOfIntent && contractorSelect) {
+            contractorSelect.value = '';
+        }
+    }
+
     // Close preview
     document.getElementById('close-preview-btn').addEventListener('click', function() {
         previewCard.style.display = 'none';
     });
 
     function loadPreview(templateId) {
+        var requestId = ++previewRequestId;
         previewCard.style.display = 'block';
-        previewLoading.style.display = 'block';
-        previewContent.innerHTML = '';
+        previewLoading.style.display = previewContent.innerHTML.trim() ? 'none' : 'block';
+        previewContent.style.opacity = '0.65';
 
         fetch('{{ url("/documents/preview-deal/" . $deal->id) }}', {
             method: 'POST',
@@ -374,12 +391,18 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(function(r) { return r.json(); })
         .then(function(data) {
+            if (requestId !== previewRequestId) return;
             previewLoading.style.display = 'none';
-            previewContent.innerHTML = data.html || '';
+            if (data.html) previewContent.innerHTML = data.html;
+            previewContent.style.opacity = '1';
         })
         .catch(function() {
+            if (requestId !== previewRequestId) return;
             previewLoading.style.display = 'none';
-            previewContent.innerHTML = '<div class="alert alert-danger">{{ __('Failed to load preview.') }}</div>';
+            if (!previewContent.innerHTML.trim()) {
+                previewContent.innerHTML = '<div class="alert alert-danger">{{ __('Failed to load preview.') }}</div>';
+            }
+            previewContent.style.opacity = '1';
         });
     }
 

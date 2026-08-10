@@ -91,7 +91,8 @@ class DocumentGenerationTest extends TestCase
 
         $this->get(route('documents.generate', $deal))
             ->assertOk()
-            ->assertSee('When one contractor is attached to the deal, it is used automatically.');
+            ->assertSee('When one contractor is attached to the deal, it is used automatically.')
+            ->assertDontSee("input.addEventListener('input'");
 
         $this->post(route('documents.store', $deal), [
             'template_id' => $template->id,
@@ -157,7 +158,7 @@ class DocumentGenerationTest extends TestCase
         $this->assertStringNotContainsString('$$170,000.00', $rendered);
     }
 
-    public function test_loi_merge_uses_the_top_matched_buyer_and_falls_back_to_the_company_line(): void
+    public function test_loi_buyer_line_uses_the_company_instead_of_a_matched_buyer(): void
     {
         $this->actingAsAdmin();
         $deal = $this->createDeal();
@@ -177,11 +178,72 @@ class DocumentGenerationTest extends TestCase
             $service->merge('<p>{{buyer.top_match}}</p>', $deal),
         );
 
-        $dealWithoutMatch = $this->createDeal();
         $this->assertStringContainsString(
-            'BOUNCE BACK REALTY and/or its assigns',
-            $service->merge('<p>{{buyer.top_match}}</p>', $dealWithoutMatch),
+            $this->tenant->name,
+            $service->merge('<p>{{company.name}}</p>', $deal),
         );
+
+        $this->assertStringNotContainsString(
+            'Top Match Investments',
+            $service->merge('<p>{{company.name}}</p>', $deal),
+        );
+    }
+
+    public function test_letter_of_intent_repair_moves_fields_into_the_body_and_removes_details_footer(): void
+    {
+        $this->actingAsAdmin();
+
+        $template = DocumentTemplate::create([
+            'tenant_id' => $this->tenant->id,
+            'name' => '1A-01-Letter of Intent',
+            'type' => 'loi',
+            'input_fields' => [
+                ['key' => 'printed_name', 'label' => 'Printed Name', 'type' => 'text'],
+                ['key' => 'document_date', 'label' => 'Document Date', 'type' => 'date'],
+                ['key' => 'closing_attorney', 'label' => 'Closing Attorney / Title Company', 'type' => 'text'],
+            ],
+            'content' => <<<'HTML'
+<html><head><style>.sig-line { flex: 1; border-bottom: 1px solid #000000; height: 1px; margin-bottom: 2px; }</style></head><body>
+<p><strong>Closing Attorney / Title Company:</strong> <span class="inline-line"></span></p>
+<p><strong>Buyer:</strong> {{buyer.top_match}}</p>
+<table><tr><td class="signature-cell"><p><strong>SELLER(S):</strong></p>
+<div><span class="signature-label">Printed Name:</span><span class="sig-line"></span></div>
+<div><span class="signature-label">Date:</span><span class="sig-line"></span></div>
+</td><td class="signature-space"></td><td class="signature-cell"><p><strong>BUYER:</strong> BOUNCE BACK REALTY</p>
+<div><span class="signature-label">Printed Name:</span><span class="sig-line"></span></div>
+<div><span class="signature-label">Date:</span><span class="sig-line"></span></div>
+</td></tr></table>
+<div data-document-entry-fields="true"><p><strong>DOCUMENT DETAILS</strong></p></div>
+</body></html>
+HTML,
+        ]);
+
+        $migration = require database_path('migrations/2026_08_10_000000_fix_letter_of_intent_template.php');
+        $migration->up();
+        $signatureMigration = require database_path('migrations/2026_08_10_000001_correct_letter_of_intent_signature_side.php');
+        $signatureMigration->up();
+        $layoutMigration = require database_path('migrations/2026_08_10_000002_align_letter_of_intent_signature_values.php');
+        $layoutMigration->up();
+        $content = $template->fresh()->content;
+
+        $this->assertStringContainsString('{{input.closing_attorney}}', $content);
+        $this->assertStringContainsString('{{company.name}}', $content);
+        $this->assertStringContainsString('{{input.printed_name}}', $content);
+        $this->assertStringContainsString('{{input.document_date}}', $content);
+        $this->assertStringNotContainsString('data-document-entry-fields', $content);
+        $this->assertStringNotContainsString('{{buyer.top_match}}', $content);
+        $this->assertStringContainsString('min-height: 18px; line-height: 18px;', $content);
+        $this->assertStringNotContainsString('height: 1px;', $content);
+
+        $buyerCellStart = strpos($content, '<strong>BUYER:');
+        $buyerCellEnd = strpos($content, '</td>', $buyerCellStart);
+        $buyerCell = substr($content, $buyerCellStart, $buyerCellEnd - $buyerCellStart);
+        $sellerContent = substr($content, 0, $buyerCellStart);
+
+        $this->assertStringContainsString('{{input.printed_name}}', $buyerCell);
+        $this->assertStringContainsString('{{input.document_date}}', $buyerCell);
+        $this->assertStringNotContainsString('{{input.printed_name}}', $sellerContent);
+        $this->assertStringNotContainsString('{{input.document_date}}', $sellerContent);
     }
 
     public function test_document_merges_selected_lender_title_company_buyer_address_and_entry_values(): void
