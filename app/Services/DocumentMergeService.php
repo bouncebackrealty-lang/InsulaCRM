@@ -45,6 +45,7 @@ class DocumentMergeService
 
             $data['input.' . $key] = is_array($value) ? implode(', ', $value) : (string) $value;
         }
+        $this->setProofOfFundsCheckboxValues($data);
 
         // Replace all {{field}} placeholders
         $rendered = preg_replace_callback('/\{\{([a-z_.]+)\}\}/', function ($matches) use ($data) {
@@ -54,6 +55,22 @@ class DocumentMergeService
         }, $template);
 
         return $this->normalizeDuplicateCurrencySymbols($rendered);
+    }
+
+    private function setProofOfFundsCheckboxValues(array &$data): void
+    {
+        $selectedSource = strtolower(trim((string) ($data['input.source_of_funds'] ?? '')));
+
+        $checkboxes = [
+            'cash_on_hand' => ['cash on hand'],
+            'hard_money' => ['hard money / private lender'],
+            'investor_partner' => ['investor / partner funds', 'investor partner'],
+            'combination' => ['combination'],
+        ];
+
+        foreach ($checkboxes as $key => $acceptedValues) {
+            $data['input.source_of_funds_' . $key] = in_array($selectedSource, $acceptedValues, true) ? '☑' : '☐';
+        }
     }
 
     /**
