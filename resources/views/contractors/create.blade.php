@@ -23,9 +23,21 @@
                     @error('name') <div class="invalid-feedback">{{ $message }}</div> @enderror
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">{{ __('Service Area') }}</label>
-                    <input type="text" name="service_area" class="form-control @error('service_area') is-invalid @enderror" value="{{ old('service_area') }}" placeholder="{{ __('e.g., Atlanta Metro, GA') }}">
-                    @error('service_area') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    <label class="form-label">{{ __('Business Name / Entity') }}</label>
+                    <input type="text" name="business_name" class="form-control @error('business_name') is-invalid @enderror" value="{{ old('business_name') }}" placeholder="{{ __('e.g., Bright Electric LLC') }}">
+                    @error('business_name') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col-md-8">
+                    <label class="form-label">{{ __('Principal Office / Mailing Address') }}</label>
+                    <input type="text" name="mailing_address" class="form-control @error('mailing_address') is-invalid @enderror" value="{{ old('mailing_address') }}">
+                    @error('mailing_address') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">{{ __('License Number') }}</label>
+                    <input type="text" name="license_number" class="form-control @error('license_number') is-invalid @enderror" value="{{ old('license_number') }}">
+                    @error('license_number') <div class="invalid-feedback">{{ $message }}</div> @enderror
                 </div>
             </div>
             <div class="row mb-3">
@@ -39,6 +51,11 @@
                     <input type="email" name="email" class="form-control @error('email') is-invalid @enderror" value="{{ old('email') }}">
                     @error('email') <div class="invalid-feedback">{{ $message }}</div> @enderror
                 </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">{{ __('Service Area') }}</label>
+                <input type="text" name="service_area" class="form-control @error('service_area') is-invalid @enderror" value="{{ old('service_area') }}" placeholder="{{ __('e.g., Atlanta Metro, GA') }}">
+                @error('service_area') <div class="invalid-feedback">{{ $message }}</div> @enderror
             </div>
             <div class="mb-3">
                 <label class="form-label">{{ __('Specialty / Trade Categories') }}</label>

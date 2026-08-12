@@ -2,14 +2,24 @@
 
 namespace App\Services;
 
-use App\Models\Deal;
 use App\Models\Contractor;
-use App\Services\BusinessModeService;
+use App\Models\Deal;
 use Carbon\Carbon;
 use Fmt;
 
 class DocumentMergeService
 {
+    private const DATE_DOCUMENT_INPUTS = [
+        'document_date',
+        'completion_deadline',
+    ];
+
+    private const CURRENCY_DOCUMENT_INPUTS = [
+        'final_payment_amount',
+        'total_paid_to_date',
+        'payment_amount_received',
+    ];
+
     /**
      * Replace all {{merge.field}} placeholders with actual values from the deal.
      */
@@ -29,21 +39,29 @@ class DocumentMergeService
         // Build the merge data map
         $data = $this->buildMergeData($deal, $lead, $property, $buyer, $tenant, $contractor);
 
-
         $data['input.closing_attorney'] = trim(implode(' ', array_filter([
             $data['title_company.closing_attorney'] ?? '',
             $data['title_company.name'] ?? '',
         ])));
         foreach ($documentInputs as $key => $value) {
-            if ($key === 'document_date' && !is_array($value) && $value !== '') {
+            if (in_array($key, self::DATE_DOCUMENT_INPUTS, true) && ! is_array($value) && $value !== '') {
                 try {
-                    $value = Carbon::parse($value)->format('m/d/Y');
+                    $date = Carbon::parse($value);
+                    $value = $date->format('m/d/Y');
+
+                    if ($key === 'document_date') {
+                        $data['input.document_date_long'] = $date->format('F j, Y');
+                    }
                 } catch (\Exception $e) {
 
                 }
             }
 
-            $data['input.' . $key] = is_array($value) ? implode(', ', $value) : (string) $value;
+            if (in_array($key, self::CURRENCY_DOCUMENT_INPUTS, true) && ! is_array($value)) {
+                $value = $this->formatDocumentInputCurrency((string) $value);
+            }
+
+            $data['input.'.$key] = is_array($value) ? implode(', ', $value) : (string) $value;
         }
         $this->setProofOfFundsCheckboxValues($data);
 
@@ -69,7 +87,7 @@ class DocumentMergeService
         ];
 
         foreach ($checkboxes as $key => $acceptedValues) {
-            $data['input.source_of_funds_' . $key] = in_array($selectedSource, $acceptedValues, true) ? '☑' : '☐';
+            $data['input.source_of_funds_'.$key] = in_array($selectedSource, $acceptedValues, true) ? '☑' : '☐';
         }
     }
 
@@ -101,8 +119,8 @@ class DocumentMergeService
 
         // Deal fields (RE)
         $data['deal.total_commission'] = $this->formatCurrency($deal->total_commission);
-        $data['deal.listing_commission_pct'] = $deal->listing_commission_pct !== null ? $deal->listing_commission_pct . '%' : '';
-        $data['deal.buyer_commission_pct'] = $deal->buyer_commission_pct !== null ? $deal->buyer_commission_pct . '%' : '';
+        $data['deal.listing_commission_pct'] = $deal->listing_commission_pct !== null ? $deal->listing_commission_pct.'%' : '';
+        $data['deal.buyer_commission_pct'] = $deal->buyer_commission_pct !== null ? $deal->buyer_commission_pct.'%' : '';
         $data['deal.mls_number'] = $deal->mls_number ?? '';
         $data['deal.listing_date'] = $this->formatDate($deal->listing_date);
 
@@ -144,7 +162,7 @@ class DocumentMergeService
         $data['property.repair_estimate'] = $this->formatCurrency($property->repair_estimate ?? null);
         $data['property.our_offer'] = $this->formatCurrency($property->our_offer ?? null);
         $data['property.distress_markers'] = $property && $property->distress_markers
-            ? implode(', ', array_map(fn($m) => __(ucwords(str_replace('_', ' ', $m))), $property->distress_markers))
+            ? implode(', ', array_map(fn ($m) => __(ucwords(str_replace('_', ' ', $m))), $property->distress_markers))
             : '';
 
         // Buyer fields
@@ -158,7 +176,7 @@ class DocumentMergeService
         $data['buyer.state'] = $buyer->state ?? '';
         $data['buyer.zip_code'] = $buyer->zip_code ?? '';
         $data['buyer.full_address'] = $buyer?->full_address ?? '';
-        $data['buyer.full_name'] = trim(($buyer->first_name ?? '') . ' ' . ($buyer->last_name ?? ''));
+        $data['buyer.full_name'] = trim(($buyer->first_name ?? '').' '.($buyer->last_name ?? ''));
         $data['buyer.top_match'] = trim($buyer->company ?? '')
             ?: $data['buyer.full_name']
             ?: trim($buyer->email ?? '')
@@ -183,11 +201,13 @@ class DocumentMergeService
         $data['title_company.phone'] = $titleCompany?->phone ?? '';
         $data['title_company.email'] = $titleCompany?->email ?? '';
 
-
         $data['contractor.name'] = $contractor->name ?? '';
+        $data['contractor.business_name'] = $contractor->business_name ?? '';
         $data['contractor.phone'] = $contractor->phone ?? '';
         $data['contractor.email'] = $contractor->email ?? '';
-        $data['contractor.trade'] = $contractor && !empty($contractor->specialty)
+        $data['contractor.mailing_address'] = $contractor->mailing_address ?? '';
+        $data['contractor.license_number'] = $contractor->license_number ?? '';
+        $data['contractor.trade'] = $contractor && ! empty($contractor->specialty)
             ? implode(', ', array_map(fn ($trade) => __(ucwords(str_replace('_', ' ', $trade))), $contractor->specialty))
             : '';
         $data['contractor.service_area'] = $contractor->service_area ?? '';
@@ -215,12 +235,23 @@ class DocumentMergeService
         return Fmt::currency($value);
     }
 
+    private function formatDocumentInputCurrency(string $value): string
+    {
+        $normalized = preg_replace('/[$,\s]/', '', trim($value));
+
+        if ($normalized === null || $normalized === '' || ! is_numeric($normalized)) {
+            return $value;
+        }
+
+        return number_format((float) $normalized, 2, '.', ',');
+    }
+
     /**
      * Format a date value to human-readable string.
      */
     protected function formatDate($date): string
     {
-        if (!$date) {
+        if (! $date) {
             return '';
         }
 
@@ -314,7 +345,7 @@ class DocumentMergeService
             'property.after_repair_value' => Fmt::currency(280000),
             'property.repair_estimate' => Fmt::currency(45000),
             'property.our_offer' => Fmt::currency(150000),
-            'property.distress_markers' => __('Tax Delinquent') . ', ' . __('Absentee Owner'),
+            'property.distress_markers' => __('Tax Delinquent').', '.__('Absentee Owner'),
 
             // Buyer / Client
             'buyer.first_name' => 'Jane',
@@ -328,9 +359,12 @@ class DocumentMergeService
             'buyer.full_address' => '456 Buyer Lane, Orlando, FL 32801',
 
             // Contractor
-            'contractor.name' => 'Acme Renovations LLC',
+            'contractor.name' => 'Alex Carter',
+            'contractor.business_name' => 'Acme Renovations LLC',
             'contractor.phone' => '(555) 246-8100',
             'contractor.email' => 'bids@acmerenovations.example',
+            'contractor.mailing_address' => '789 Builder Way, Orlando, FL 32801',
+            'contractor.license_number' => 'FL-CGC-123456',
             'contractor.trade' => 'General Contractor',
             'contractor.service_area' => 'Orlando Metro',
             'contractor.status' => 'Hired',
@@ -363,7 +397,7 @@ class DocumentMergeService
         $rendered = preg_replace_callback('/\{\{([a-z_.]+)\}\}/', function ($matches) use ($sampleData) {
             $field = $matches[1];
 
-            return $sampleData[$field] ?? '{{' . $field . '}}';
+            return $sampleData[$field] ?? '{{'.$field.'}}';
         }, $template);
 
         return $this->normalizeDuplicateCurrencySymbols($rendered);

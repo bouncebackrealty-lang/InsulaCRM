@@ -30,8 +30,11 @@ class ContractorRequest extends FormRequest
     {
         return [
             'name' => 'required|string|max:255',
+            'business_name' => 'nullable|string|max:255',
             'phone' => 'nullable|string|max:50',
             'email' => 'nullable|email|max:255',
+            'mailing_address' => 'nullable|string|max:255',
+            'license_number' => 'nullable|string|max:255',
             'specialty' => 'nullable|array',
             'specialty.*' => ['string', Rule::in(array_keys(Contractor::TRADE_CATEGORIES))],
             'service_area' => 'nullable|string|max:255',

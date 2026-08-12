@@ -116,7 +116,12 @@
                 @forelse($contractors as $contractor)
                 <tr>
                     <td><input type="checkbox" class="form-check-input contractor-checkbox" value="{{ $contractor->id }}" aria-label="{{ __('Select') }} {{ $contractor->name }}"></td>
-                    <td><a href="{{ route('contractors.show', $contractor) }}">{{ $contractor->name }}</a></td>
+                    <td>
+                        <a href="{{ route('contractors.show', $contractor) }}">{{ $contractor->name }}</a>
+                        @if($contractor->business_name)
+                            <div class="text-secondary small">{{ $contractor->business_name }}</div>
+                        @endif
+                    </td>
                     <td>
                         @forelse($contractor->specialty ?? [] as $trade)
                             <span class="badge bg-blue-lt me-1">{{ __(\App\Models\Contractor::TRADE_CATEGORIES[$trade] ?? $trade) }}</span>

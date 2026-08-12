@@ -46,8 +46,11 @@ class ContractorManagementTest extends TestCase
 
         $response = $this->post('/contractors', [
             'name' => 'Bright Electric',
+            'business_name' => 'Bright Electric LLC',
             'phone' => '555-0111',
             'email' => 'bright@example.com',
+            'mailing_address' => '22 Power Ave, Atlanta, GA 30318',
+            'license_number' => 'GA-67890',
             'specialty' => ['electrical', 'general_contractor'],
             'service_area' => 'GA',
             'priority' => 'medium',
@@ -60,6 +63,9 @@ class ContractorManagementTest extends TestCase
         $this->assertSame(['electrical', 'general_contractor'], $contractor->specialty);
         $this->assertDatabaseHas('contractors', [
             'name' => 'Bright Electric',
+            'business_name' => 'Bright Electric LLC',
+            'mailing_address' => '22 Power Ave, Atlanta, GA 30318',
+            'license_number' => 'GA-67890',
             'tenant_id' => $this->tenant->id,
             'priority' => 'medium',
         ]);
@@ -205,8 +211,8 @@ class ContractorManagementTest extends TestCase
 
         // Header uses a space ("service area") and values use display labels.
         $csv = "name,phone,email,specialty,service area,priority,referral_source,status,notes\n"
-             . "Acme Roofing,555-0100,acme@example.com,\"Roofing, HVAC\",Atlanta Metro,High,Referred by John,Bid Submitted,Reliable\n"
-             . "Bright Electric,555-0111,bright@example.com,Electrical,Fulton County,Medium,Facebook,Contacted,\n";
+             ."Acme Roofing,555-0100,acme@example.com,\"Roofing, HVAC\",Atlanta Metro,High,Referred by John,Bid Submitted,Reliable\n"
+             ."Bright Electric,555-0111,bright@example.com,Electrical,Fulton County,Medium,Facebook,Contacted,\n";
 
         $file = UploadedFile::fake()->createWithContent('contractors.csv', $csv);
 
@@ -227,8 +233,8 @@ class ContractorManagementTest extends TestCase
         $this->actingAsAdmin();
 
         $csv = "name,priority,status\n"
-             . ",High,Hired\n"
-             . "No Priority Co,,\n";
+             .",High,Hired\n"
+             ."No Priority Co,,\n";
 
         $file = UploadedFile::fake()->createWithContent('contractors.csv', $csv);
 

@@ -2,13 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\Buyer;
 use App\Models\ComparableSale;
 use App\Models\Contractor;
-use App\Models\Buyer;
 use App\Models\DealBuyerMatch;
 use App\Models\DealContractor;
-use App\Models\DocumentTemplate;
 use App\Models\DealLender;
+use App\Models\DocumentTemplate;
 use App\Models\GeneratedDocument;
 use App\Models\Lender;
 use App\Models\LenderLoanProgram;
@@ -547,6 +547,188 @@ HTML,
         $this->assertStringContainsString('42 Buyer Way, Atlanta, GA 30318', $content);
         $this->assertStringContainsString('Hard Money / Private Lender', $content);
         $this->assertStringContainsString('Latanya White', $content);
+    }
+
+    public function test_remaining_templates_move_document_inputs_into_body_fields_and_remove_details(): void
+    {
+        $this->actingAsAdmin();
+
+        $templates = [];
+        foreach ([
+            ['name' => '2D-01-Assignment Contract', 'content' => '<table><tr><td>Assignee Address</td><td><span class="inline-line"></span></td></tr><tr><td>Assignment Fee</td><td>$<span class="inline-line"></span></td></tr><tr><td>Title Company / Closing Attorney</td><td><span class="inline-line"></span></td></tr></table><table class="signature-table"><tr><td class="signature-cell"><p>ASSIGNOR:</p><span class="signature-label">Printed Name:</span><span class="sig-line"></span><span class="signature-label">Date:</span><span class="sig-line"></span></td></tr></table><div data-document-entry-fields="true">{{input.printed_name}}{{input.document_date}}</div>'],
+            ['name' => '3R-01-Independent Contractor Agreement', 'content' => 'Federal Employer Identification Number or Social Security Number is: <span class="inline-line"></span><table class="signature-table"><tr><td class="signature-cell"><p>COMPANY:</p><span class="signature-label">Printed Name:</span><span class="sig-line"></span><span class="signature-label">Date:</span><span class="sig-line"></span></td></tr></table><div data-document-entry-fields="true">{{input.contractor_ein_ssn}}{{input.printed_name}}{{input.document_date}}</div>'],
+            ['name' => '3R-03-Scope of Work', 'content' => '<table><tr><td>Completion Deadline</td><td><span class="inline-line"></span></td></tr></table><table class="signature-table"><tr><td class="signature-cell"><p>OWNER:</p><span class="signature-label">Printed Name:</span><span class="sig-line"></span><span class="signature-label">Date:</span><span class="sig-line"></span></td></tr></table><div data-document-entry-fields="true">{{input.completion_deadline}}{{input.printed_name}}{{input.document_date}}</div>'],
+            ['name' => '4C-01-Lien Waiver', 'content' => '<table><tr><td>Final Payment Amount</td><td><span class="inline-line"></span></td></tr><tr><td>Total Paid to Date</td><td><span class="inline-line"></span></td></tr></table><table class="signature-table"><tr><td class="signature-cell"><p>OWNER ACKNOWLEDGMENT:</p><span class="stacked-label">Printed Name:</span><span class="stacked-line"></span><span class="stacked-label">Date:</span><span class="stacked-line"></span></td></tr></table><div data-document-entry-fields="true">{{input.final_payment_amount}}{{input.total_paid_to_date}}{{input.printed_name}}{{input.document_date}}</div>'],
+            ['name' => '1A-05-Earnest Money Deposit Release Form', 'content' => '<table class="signature-table"><tr><td class="signature-cell"><p>BUYER:</p><span class="signature-label">Printed Name:</span><span class="sig-line"></span><span class="signature-label">Date:</span><span class="sig-line"></span></td></tr></table><div data-document-entry-fields="true">{{input.printed_name}}{{input.document_date}}</div>'],
+            ['name' => '4C-02-Partial Lien Waiver', 'content' => '<table><tr><td>Payment Amount Received</td><td>$<span class="inline-line"></span> (Payment #<span class="inline-line"></span>)</td></tr></table><table class="signature-table"><tr><td class="signature-cell"><p>CONTRACTOR:</p><span class="stacked-label">Printed Name:</span><span class="stacked-line"></span><span class="stacked-label">Date:</span><span class="stacked-line"></span></td></tr></table><div data-document-entry-fields="true">{{input.payment_amount_received}}{{input.payment_number}}{{input.printed_name}}{{input.document_date}}</div>'],
+        ] as $definition) {
+            $templates[] = DocumentTemplate::create([
+                'tenant_id' => $this->tenant->id,
+                'name' => $definition['name'],
+                'type' => 'other',
+                'input_fields' => [],
+                'content' => $definition['content'],
+            ]);
+        }
+
+        $migration = require database_path('migrations/2026_08_12_000010_fix_remaining_document_input_fields.php');
+        $migration->up();
+        $partialLienMigration = require database_path('migrations/2026_08_12_000011_fix_partial_lien_payment_number.php');
+        $partialLienMigration->up();
+
+        foreach ($templates as $template) {
+            $content = $template->fresh()->content;
+            $this->assertStringNotContainsString('data-document-entry-fields', $content, $template->name);
+            $this->assertStringContainsString('{{input.printed_name}}', $content, $template->name);
+            $this->assertStringContainsString('{{input.document_date}}', $content, $template->name);
+        }
+
+        $this->assertStringContainsString('{{buyer.full_address}}', $templates[0]->fresh()->content);
+        $this->assertStringContainsString('{{deal.assignment_fee}}', $templates[0]->fresh()->content);
+        $this->assertStringContainsString('{{input.contractor_ein_ssn}}', $templates[1]->fresh()->content);
+        $this->assertStringContainsString('{{input.completion_deadline}}', $templates[2]->fresh()->content);
+        $this->assertStringContainsString('{{input.final_payment_amount}}', $templates[3]->fresh()->content);
+        $this->assertStringContainsString('{{input.payment_amount_received}}', $templates[5]->fresh()->content);
+        $this->assertStringContainsString('{{input.payment_number}}', $templates[5]->fresh()->content);
+
+        $deal = $this->createDeal(['assignment_fee' => 12500]);
+        $buyer = Buyer::create([
+            'tenant_id' => $this->tenant->id,
+            'first_name' => 'James',
+            'last_name' => 'Bond',
+            'company' => 'Snap Back Homes LLC',
+            'address' => '123 Buyer Lane',
+            'city' => 'Atlanta',
+            'state' => 'GA',
+            'zip_code' => '30318',
+        ]);
+        DealBuyerMatch::create([
+            'deal_id' => $deal->id,
+            'buyer_id' => $buyer->id,
+            'match_score' => 99,
+        ]);
+        $titleCompany = TitleCompany::create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'Peachtree Title',
+            'closing_attorney' => 'Alex Morgan',
+        ]);
+        $deal->update(['title_company_id' => $titleCompany->id]);
+
+        $renderedAssignment = app(DocumentMergeService::class)->merge(
+            $templates[0]->fresh()->content,
+            $deal,
+            null,
+            ['printed_name' => 'Latanya White', 'document_date' => '2026-08-10'],
+        );
+
+        $this->assertStringContainsString('123 Buyer Lane, Atlanta, GA 30318', $renderedAssignment);
+        $this->assertStringContainsString('12,500.00', $renderedAssignment);
+        $this->assertStringContainsString('Peachtree Title Alex Morgan', $renderedAssignment);
+    }
+
+    public function test_remaining_template_polish_aligns_signatures_dates_and_contractor_identity_fields(): void
+    {
+        $this->actingAsAdmin();
+
+        $sigCss = '<style>.signature-field { margin-top: 20px; }.sig-line { flex: 1; border-bottom: 1px solid #000; height: 1px; margin-bottom: 2px; }</style>';
+        $signatureCell = static fn (string $party): string => '<td class="signature-cell"><p>'.$party.':</p>'
+            .'<span class="signature-label">Printed Name:</span><span class="sig-line"></span>'
+            .'<span class="signature-label">Date:</span><span class="sig-line"></span></td>';
+        $dateRow = '<table><tr><td><strong>Date</strong></td><td><span class="inline-line">{{today}}</span></td></tr></table>';
+
+        $templates = collect([
+            '1A-03-Seller Disclosure' => $sigCss.$dateRow.'<table><tr>'.$signatureCell('BUYER').'</tr></table><div data-document-entry-fields="true">legacy</div>',
+            '1A-05-Earnest Money Deposit Release Form' => $sigCss.$dateRow.'<table><tr>'.$signatureCell('BUYER').$signatureCell('SELLER').'</tr></table><div data-document-entry-fields="true">legacy</div>',
+            '2D-01-Assignment Contract' => $sigCss.'<p>as of <span class="inline-line">{{today_month_day}}</span>, <span class="inline-line">{{today_year}}</span>, by and between</p><table><tr>'.$signatureCell('ASSIGNEE (CASH BUYER)').$signatureCell('ASSIGNOR').'</tr></table>',
+            '3R-01-Independent Contractor Agreement' => $sigCss.'<p>as of <span class="inline-line">{{today_month_day}}</span>, <span class="inline-line">{{today_year}}</span></p><table>'
+                .'<tr><td><strong>Contractor Name / Business Name</strong></td><td><span class="inline-line">{{contractor.name}}</span></td></tr>'
+                .'<tr><td><strong>Business Entity Type</strong></td><td><span class="inline-line">{{contractor.trade}}</span></td></tr>'
+                .'<tr><td><strong>Principal Office / Mailing Address</strong></td><td><span class="inline-line">{{contractor.service_area}}</span></td></tr>'
+                .'</table><p>Phone: <span class="inline-line" style="width: 35%;">{{contractor.phone}}</span> Email: <span class="inline-line" style="width: 35%;">{{contractor.email}}</span></p>',
+            '3R-02-Contractor Bid Package' => '<p><strong>Contractor Company Name:</strong> {{contractor.name}}</p><p><strong>Contact Name:</strong> {{contractor.name}}</p><p><strong>License Number:</strong> __________________</p>',
+            '3R-03-Scope of Work' => $sigCss.'<table>'
+                .'<tr><td><strong>Agreement Date</strong></td><td><span class="inline-line">{{today}}</span></td></tr>'
+                .'<tr><td><strong>Completion Deadline</strong></td><td><span class="inline-line">{{input.completion_deadline}}</span></td></tr>'
+                .'</table><p><strong>Project Completion Deadline:</strong> <span class="inline-line"></span>, 20<span class="inline-line"></span></p>',
+            '3R-04-Change Order Form' => '<table><tr><td><strong>New Completion Date</strong></td><td><input placeholder="MM/DD/YYYY" value="{{input.document_date}}"></td></tr></table>',
+            '4C-01-Lien Waiver' => $dateRow,
+            '4C-02-Partial Lien Waiver' => '<p>Date of Payment: {{today}}</p><p>Work completed through {{today}}</p>',
+        ])->map(function (string $content, string $name): DocumentTemplate {
+            return DocumentTemplate::create([
+                'tenant_id' => $this->tenant->id,
+                'name' => $name,
+                'type' => 'other',
+                'input_fields' => [],
+                'content' => $content,
+            ]);
+        });
+
+        $migration = require database_path('migrations/2026_08_12_000014_polish_remaining_document_templates.php');
+        $migration->up();
+
+        $seller = $templates['1A-03-Seller Disclosure']->fresh()->content;
+        $this->assertStringContainsString('min-height: 18px; line-height: 18px;', $seller);
+        $this->assertStringNotContainsString('height: 1px;', $seller);
+        $this->assertStringContainsString('margin-top: 8px;', $seller);
+        $this->assertStringContainsString('{{input.document_date}}', $seller);
+        $this->assertStringNotContainsString('data-document-entry-fields', $seller);
+
+        $emd = $templates['1A-05-Earnest Money Deposit Release Form']->fresh()->content;
+        $this->assertStringContainsString('{{lead.full_name}}', $emd);
+        $this->assertSame(2, substr_count($emd, '{{input.document_date}}'));
+
+        $assignment = $templates['2D-01-Assignment Contract']->fresh()->content;
+        $this->assertStringContainsString('{{input.document_date_long}}', $assignment);
+        $this->assertStringContainsString('{{buyer.full_name}}', $assignment);
+
+        $contractorAgreement = $templates['3R-01-Independent Contractor Agreement']->fresh()->content;
+        $this->assertStringContainsString('Contractor Name</strong>', $contractorAgreement);
+        $this->assertStringContainsString('Business Name / Entity', $contractorAgreement);
+        $this->assertStringContainsString('{{contractor.business_name}}', $contractorAgreement);
+        $this->assertStringContainsString('{{contractor.mailing_address}}', $contractorAgreement);
+        $this->assertStringContainsString('width: 44%;', $contractorAgreement);
+
+        $bidPackage = $templates['3R-02-Contractor Bid Package']->fresh()->content;
+        $this->assertStringContainsString('<strong>Business Name:</strong> {{contractor.business_name}}', $bidPackage);
+        $this->assertStringContainsString('<strong>Contact Name:</strong> {{contractor.name}}', $bidPackage);
+        $this->assertStringContainsString('{{contractor.license_number}}', $bidPackage);
+
+        $scope = $templates['3R-03-Scope of Work']->fresh()->content;
+        $this->assertStringContainsString('{{input.document_date}}', $scope);
+        $this->assertSame(2, substr_count($scope, '{{input.completion_deadline}}'));
+        $this->assertStringNotContainsString(', 20<span', $scope);
+
+        $changeOrder = $templates['3R-04-Change Order Form']->fresh()->content;
+        $this->assertStringNotContainsString('value="{{input.document_date}}"', $changeOrder);
+
+        $this->assertStringContainsString('{{input.document_date}}', $templates['4C-01-Lien Waiver']->fresh()->content);
+        $this->assertSame(2, substr_count($templates['4C-02-Partial Lien Waiver']->fresh()->content, '{{input.document_date}}'));
+    }
+
+    public function test_change_order_property_address_is_sized_to_fit_the_pdf_cell(): void
+    {
+        $this->actingAsAdmin();
+
+        $template = DocumentTemplate::create([
+            'tenant_id' => $this->tenant->id,
+            'name' => '3R-04-Change Order Form',
+            'type' => 'other',
+            'input_fields' => [],
+            'content' => '<table><tr>'
+                .'<td><strong>Property Address</strong></td>'
+                .'<td><input type="text" style="width: 95%; border: none; font-size: 1em;" value="{{property.full_address}}"></td>'
+                .'</tr></table>',
+        ]);
+
+        $migration = require database_path('migrations/2026_08_12_000015_fit_change_order_property_address.php');
+        $migration->up();
+
+        $content = $template->fresh()->content;
+
+        $this->assertStringContainsString('width: 100%;', $content);
+        $this->assertStringContainsString('font-size: 0.62em;', $content);
+        $this->assertStringContainsString('box-sizing: border-box;', $content);
+        $this->assertStringContainsString('{{property.full_address}}', $content);
     }
 
     public function test_investor_packet_uses_saved_comparable_sale_data_for_arv_and_comp_rows(): void

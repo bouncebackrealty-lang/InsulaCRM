@@ -22,9 +22,12 @@ class ContractorController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('phone', 'like', "%{$search}%")
-                  ->orWhere('service_area', 'like', "%{$search}%");
+                    ->orWhere('business_name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%")
+                    ->orWhere('mailing_address', 'like', "%{$search}%")
+                    ->orWhere('license_number', 'like', "%{$search}%")
+                    ->orWhere('service_area', 'like', "%{$search}%");
             });
         }
 
@@ -162,9 +165,12 @@ class ContractorController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('phone', 'like', "%{$search}%")
-                  ->orWhere('service_area', 'like', "%{$search}%");
+                    ->orWhere('business_name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%")
+                    ->orWhere('mailing_address', 'like', "%{$search}%")
+                    ->orWhere('license_number', 'like', "%{$search}%")
+                    ->orWhere('service_area', 'like', "%{$search}%");
             });
         }
 
@@ -185,7 +191,8 @@ class ContractorController extends Controller
         return response()->streamDownload(function () use ($contractors) {
             $handle = fopen('php://output', 'w');
             fputcsv($handle, [
-                __('Name'), __('Phone'), __('Email'), __('Specialty'),
+                __('Name'), __('Business Name / Entity'), __('Phone'), __('Email'),
+                __('Principal Office / Mailing Address'), __('License Number'), __('Specialty'),
                 __('Service Area'), __('Priority'), __('Referral Source'), __('Status'), __('Notes'),
             ]);
             foreach ($contractors as $contractor) {
@@ -194,8 +201,11 @@ class ContractorController extends Controller
                     ->implode(', ');
                 fputcsv($handle, [
                     $contractor->name,
+                    $contractor->business_name,
                     $contractor->phone,
                     $contractor->email,
+                    $contractor->mailing_address,
+                    $contractor->license_number,
                     $specialties,
                     $contractor->service_area,
                     Contractor::PRIORITIES[$contractor->priority] ?? $contractor->priority,
@@ -205,7 +215,7 @@ class ContractorController extends Controller
                 ]);
             }
             fclose($handle);
-        }, 'contractors-export-' . now()->format('Y-m-d') . '.csv', [
+        }, 'contractors-export-'.now()->format('Y-m-d').'.csv', [
             'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
     }
@@ -220,16 +230,16 @@ class ContractorController extends Controller
         return response()->streamDownload(function () {
             $handle = fopen('php://output', 'w');
             fputcsv($handle, [
-                'name', 'phone', 'email', 'specialty', 'service_area',
+                'name', 'business_name', 'phone', 'email', 'mailing_address', 'license_number', 'specialty', 'service_area',
                 'priority', 'referral_source', 'status', 'notes',
             ]);
             // Example rows showing the expected format.
             fputcsv($handle, [
-                'Acme Roofing', '555-0100', 'acme@example.com', 'Roofing, HVAC', 'Atlanta Metro, GA',
+                'Alex Carter', 'Acme Roofing LLC', '555-0100', 'acme@example.com', '10 Main St, Atlanta, GA 30303', 'GA-12345', 'Roofing, HVAC', 'Atlanta Metro, GA',
                 'High', 'Referred by John', 'Bid Submitted', 'Reliable crew, fast turnaround',
             ]);
             fputcsv($handle, [
-                'Bright Electric', '555-0111', 'bright@example.com', 'Electrical', 'Fulton County, GA',
+                'Jordan Lee', 'Bright Electric LLC', '555-0111', 'bright@example.com', '22 Power Ave, Atlanta, GA 30318', 'GA-67890', 'Electrical', 'Fulton County, GA',
                 'Medium', 'Facebook group', 'Contacted', '',
             ]);
             fclose($handle);
@@ -257,16 +267,18 @@ class ContractorController extends Controller
         $header = fgetcsv($handle);
         if ($header === false) {
             fclose($handle);
+
             return redirect()->route('contractors.index')->with('error', __('The CSV file is empty or invalid.'));
         }
 
         // Normalize headers: lowercase, trim, spaces -> underscores, strip BOM.
         $header = array_map(function ($col) {
             $col = preg_replace('/^\xEF\xBB\xBF/', '', (string) $col);
+
             return str_replace(' ', '_', strtolower(trim($col)));
         }, $header);
 
-        $columns = ['name', 'phone', 'email', 'specialty', 'service_area', 'priority', 'referral_source', 'status', 'notes'];
+        $columns = ['name', 'business_name', 'phone', 'email', 'mailing_address', 'license_number', 'specialty', 'service_area', 'priority', 'referral_source', 'status', 'notes'];
         $map = [];
         foreach ($columns as $col) {
             $index = array_search($col, $header, true);
@@ -275,6 +287,7 @@ class ContractorController extends Controller
 
         if ($map['name'] === null) {
             fclose($handle);
+
             return redirect()->route('contractors.index')->with('error', __('CSV must contain a "name" column.'));
         }
 
@@ -291,6 +304,7 @@ class ContractorController extends Controller
             $name = trim((string) ($row[$map['name']] ?? ''));
             if ($name === '') {
                 $skipped++;
+
                 continue;
             }
 
@@ -300,7 +314,7 @@ class ContractorController extends Controller
             if ($map['specialty'] !== null) {
                 foreach (preg_split('/[,;|]/', (string) $row[$map['specialty']]) as $part) {
                     $key = $this->resolveOption($part, Contractor::TRADE_CATEGORIES);
-                    if ($key !== null && !in_array($key, $specialty, true)) {
+                    if ($key !== null && ! in_array($key, $specialty, true)) {
                         $specialty[] = $key;
                     }
                 }
@@ -309,8 +323,11 @@ class ContractorController extends Controller
             Contractor::create([
                 'tenant_id' => $tenantId,
                 'name' => $name,
+                'business_name' => $get('business_name') ?: null,
                 'phone' => $get('phone') ?: null,
                 'email' => $get('email') ?: null,
+                'mailing_address' => $get('mailing_address') ?: null,
+                'license_number' => $get('license_number') ?: null,
                 'specialty' => $specialty,
                 'service_area' => $get('service_area') ?: null,
                 'priority' => $this->resolveOption($get('priority'), Contractor::PRIORITIES) ?? 'medium',
@@ -326,7 +343,7 @@ class ContractorController extends Controller
 
         $message = __(':count contractor(s) imported successfully.', ['count' => $imported]);
         if ($skipped > 0) {
-            $message .= ' ' . __(':count row(s) skipped (missing name).', ['count' => $skipped]);
+            $message .= ' '.__(':count row(s) skipped (missing name).', ['count' => $skipped]);
         }
 
         return redirect()->route('contractors.index')->with('success', $message);
@@ -352,6 +369,7 @@ class ContractorController extends Controller
 
         // Also match a slugified label, e.g. "general contractor" -> "general_contractor".
         $slug = str_replace(' ', '_', $needle);
+
         return array_key_exists($slug, $options) ? $slug : null;
     }
 }

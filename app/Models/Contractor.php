@@ -51,8 +51,11 @@ class Contractor extends Model
     protected $fillable = [
         'tenant_id',
         'name',
+        'business_name',
         'phone',
         'email',
+        'mailing_address',
+        'license_number',
         'specialty',
         'service_area',
         'priority',

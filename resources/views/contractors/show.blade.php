@@ -26,6 +26,10 @@
                         <div class="datagrid-content">{{ $contractor->name }}</div>
                     </div>
                     <div class="datagrid-item">
+                        <div class="datagrid-title">{{ __('Business Name / Entity') }}</div>
+                        <div class="datagrid-content">{{ $contractor->business_name ?: '-' }}</div>
+                    </div>
+                    <div class="datagrid-item">
                         <div class="datagrid-title">{{ __('Phone') }}</div>
                         <div class="datagrid-content">@if($contractor->phone)<a href="tel:{{ $contractor->phone }}" class="text-reset">{{ $contractor->phone }}</a>@else - @endif</div>
                     </div>
@@ -36,6 +40,14 @@
                     <div class="datagrid-item">
                         <div class="datagrid-title">{{ __('Service Area') }}</div>
                         <div class="datagrid-content">{{ $contractor->service_area ?? '-' }}</div>
+                    </div>
+                    <div class="datagrid-item">
+                        <div class="datagrid-title">{{ __('Principal Office / Mailing Address') }}</div>
+                        <div class="datagrid-content">{{ $contractor->mailing_address ?: '-' }}</div>
+                    </div>
+                    <div class="datagrid-item">
+                        <div class="datagrid-title">{{ __('License Number') }}</div>
+                        <div class="datagrid-content">{{ $contractor->license_number ?: '-' }}</div>
                     </div>
                     <div class="datagrid-item">
                         <div class="datagrid-title">{{ __('Specialty') }}</div>

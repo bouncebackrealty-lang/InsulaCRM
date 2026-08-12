@@ -50,7 +50,7 @@ class DocumentTemplate extends Model
      */
     public static function typeLabels(): array
     {
-        return array_map(fn($label) => __($label), self::TYPES);
+        return array_map(fn ($label) => __($label), self::TYPES);
     }
 
     /**
@@ -143,8 +143,11 @@ class DocumentTemplate extends Model
             ],
             __('Contractor') => [
                 'contractor.name' => __('Contractor Name'),
+                'contractor.business_name' => __('Contractor Business Name / Entity'),
                 'contractor.phone' => __('Contractor Phone'),
                 'contractor.email' => __('Contractor Email'),
+                'contractor.mailing_address' => __('Contractor Mailing Address'),
+                'contractor.license_number' => __('Contractor License Number'),
                 'contractor.trade' => __('Contractor Trade / Specialty'),
                 'contractor.service_area' => __('Contractor Service Area'),
                 'contractor.status' => __('Contractor Status'),
