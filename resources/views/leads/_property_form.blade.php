@@ -170,7 +170,7 @@
                     <label class="form-label">{{ __('Distress Markers') }}</label>
                     @php $currentMarkers = old('distress_markers', $lead->property->distress_markers ?? []); @endphp
                     <div class="dropdown" id="distress-markers-picker">
-                        <button class="btn btn-outline-secondary w-100 text-start d-flex justify-content-between align-items-center" type="button" id="distress-markers-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                        <button class="btn btn-outline-secondary w-100 text-start d-flex justify-content-between align-items-center" type="button" id="distress-markers-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
                             <span id="distress-markers-label">{{ __('Select distress markers') }}</span>
                             <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-sm" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="m6 9 6 6 6-6"/></svg>
                         </button>
@@ -183,10 +183,13 @@
                                     </span>
                                 </button>
                             @endforeach
+                            <div class="border-top mt-1 pt-2 px-2 pb-1 text-end">
+                                <button type="button" class="btn btn-sm btn-primary" id="distress-markers-done">{{ __('Done') }}</button>
+                            </div>
                         </div>
                     </div>
                     <div id="distress-markers-inputs"></div>
-                    <small class="text-secondary">{{ __('Select one marker at a time; the menu closes after each selection.') }}</small>
+                    <small class="text-secondary">{{ __('Select all applicable markers, then click Done.') }}</small>
                 </div>
                 @endif
             </div>
@@ -331,6 +334,7 @@ document.querySelector('[name="deal_type"]')?.addEventListener('change', calcula
     const inputs = document.getElementById('distress-markers-inputs');
     const label = document.getElementById('distress-markers-label');
     const toggle = document.getElementById('distress-markers-toggle');
+    const done = document.getElementById('distress-markers-done');
     if (!picker || !inputs || !label || !toggle) return;
 
     const update = function () {
@@ -346,11 +350,15 @@ document.querySelector('[name="deal_type"]')?.addEventListener('change', calcula
     picker.querySelectorAll('.distress-marker-option').forEach(function (option) {
         option.addEventListener('click', function (event) {
             event.preventDefault();
+            event.stopPropagation();
             const checkbox = option.querySelector('.distress-marker-checkbox');
             checkbox.checked = !checkbox.checked;
             update();
-            bootstrap.Dropdown.getOrCreateInstance(toggle).hide();
         });
+    });
+
+    done?.addEventListener('click', function () {
+        bootstrap.Dropdown.getOrCreateInstance(toggle).hide();
     });
 
     update();

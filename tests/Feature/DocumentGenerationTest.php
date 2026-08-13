@@ -757,6 +757,34 @@ HTML,
         $this->assertStringContainsString('class="document-tagline"', $content);
     }
 
+    public function test_independent_contractor_phone_and_email_stay_on_one_line(): void
+    {
+        $this->actingAsAdmin();
+
+        $template = DocumentTemplate::create([
+            'tenant_id' => $this->tenant->id,
+            'name' => '3R-01-Independent Contractor Agreement',
+            'type' => 'other',
+            'input_fields' => [],
+            'content' => '<table><tr>'
+                .'<td class="info-label-cell"><strong>Phone & Email</strong></td>'
+                .'<td>Phone: <span class="inline-line" style="width: 26%;">{{contractor.phone}}</span> '
+                .'Email: <span class="inline-line" style="width: 44%;">{{contractor.email}}</span></td>'
+                .'</tr></table>',
+        ]);
+
+        $migration = require database_path('migrations/2026_08_13_000018_keep_contractor_phone_and_email_on_one_line.php');
+        $migration->up();
+
+        $content = $template->fresh()->content;
+
+        $this->assertStringContainsString('<td style="white-space: nowrap;">', $content);
+        $this->assertStringContainsString('width: 24%; white-space: nowrap;', $content);
+        $this->assertStringContainsString('width: 48%; white-space: nowrap;', $content);
+        $this->assertSame(1, substr_count($content, '{{contractor.phone}}'));
+        $this->assertSame(1, substr_count($content, '{{contractor.email}}'));
+    }
+
     public function test_change_order_preview_values_are_saved_in_the_generated_document(): void
     {
         $this->actingAsAdmin();

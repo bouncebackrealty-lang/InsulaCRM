@@ -179,6 +179,21 @@ class LeadManagementTest extends TestCase
         $response->assertDontSee('type="number" name="bathrooms"', false);
     }
 
+    public function test_distress_marker_picker_stays_open_for_multiple_selections_until_done(): void
+    {
+        $this->actingAsAdmin();
+        $lead = $this->createLead();
+
+        $response = $this->get("/leads/{$lead->id}");
+
+        $response->assertOk();
+        $response->assertSee('data-bs-auto-close="outside"', false);
+        $response->assertSee('id="distress-markers-done"', false);
+        $response->assertSee('Select all applicable markers, then click Done.');
+        $response->assertDontSee('Select one marker at a time; the menu closes after each selection.');
+        $response->assertDontSee('checkbox.checked = !checkbox.checked;\n            update();\n            bootstrap.Dropdown.getOrCreateInstance(toggle).hide();', false);
+    }
+
     public function test_admin_can_upload_more_than_ten_photos_to_a_lead(): void
     {
         Storage::fake('public');
