@@ -28,7 +28,7 @@ class DocumentGeneratorController extends Controller
      */
     public function create(Deal $deal)
     {
-        $deal->loadMissing(['lead.property', 'tenant', 'buyerMatches.buyer', 'contractors.contractor', 'lenders.lender', 'titleCompany']);
+        $deal->loadMissing(['lead.property', 'tenant', 'selectedBuyer', 'buyerMatches.buyer', 'contractors.contractor', 'lenders.lender', 'titleCompany']);
 
         $templates = DocumentTemplate::orderBy('name')->get();
 
@@ -56,7 +56,7 @@ class DocumentGeneratorController extends Controller
         ]);
 
         $template = DocumentTemplate::findOrFail($request->template_id);
-        $deal->loadMissing(['lead.property', 'tenant', 'buyerMatches.buyer', 'contractors.contractor']);
+        $deal->loadMissing(['lead.property', 'tenant', 'selectedBuyer', 'buyerMatches.buyer', 'contractors.contractor']);
 
         $rendered = $this->mergeService->merge(
             $template->content,
@@ -79,16 +79,32 @@ class DocumentGeneratorController extends Controller
             'template_id' => 'required|exists:document_templates,id',
             'name' => 'nullable|string|max:255',
             'contractor_id' => 'nullable|integer',
+            'preview_controls' => 'nullable|string|max:131072',
         ]);
 
         $template = DocumentTemplate::findOrFail($request->template_id);
-        $deal->loadMissing(['lead.property', 'tenant', 'buyerMatches.buyer', 'contractors.contractor']);
+        $deal->loadMissing(['lead.property', 'tenant', 'selectedBuyer', 'buyerMatches.buyer', 'contractors.contractor']);
+
+        $requiresSelectedBuyer = collect($template->merge_fields ?? [])->contains(
+            static fn ($field): bool => str_starts_with((string) $field, 'buyer.')
+        ) || str_contains((string) $template->content, '{{buyer.');
+
+        if ($requiresSelectedBuyer && ! $deal->selectedBuyer) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'template_id' => __('Select the Buyer for This Deal before generating this buyer-specific document.'),
+            ]);
+        }
 
         $rendered = $this->mergeService->merge(
             $template->content,
             $deal,
             $this->selectedContractor($request, $deal, $template),
             $this->documentInputs($request, $template),
+        );
+
+        $rendered = $this->mergeService->applyPreviewControlValues(
+            $rendered,
+            $this->previewControls($request),
         );
 
         $rendered = $this->sanitizeDocumentHtml($rendered);
@@ -376,5 +392,58 @@ class DocumentGeneratorController extends Controller
             array_intersect_key($submitted, array_flip($configured)),
             static fn ($value) => $value !== null && $value !== ''
         );
+    }
+
+    /**
+     * Normalize values captured from controls typed into the live preview.
+     * Values are bounded here before being safely escaped into generated HTML
+     * by DocumentMergeService.
+     *
+     * @return array<int, array{index:int, tag:string, type:string, value:string, checked:bool}>
+     */
+    private function previewControls(Request $request): array
+    {
+        $raw = $request->input('preview_controls');
+        if (! is_string($raw) || $raw === '') {
+            return [];
+        }
+
+        try {
+            $decoded = json_decode($raw, true, 32, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return [];
+        }
+
+        if (! is_array($decoded)) {
+            return [];
+        }
+
+        $controls = [];
+        foreach (array_slice($decoded, 0, 100) as $control) {
+            if (! is_array($control)) {
+                continue;
+            }
+
+            $index = filter_var($control['index'] ?? null, FILTER_VALIDATE_INT);
+            $tag = strtolower((string) ($control['tag'] ?? ''));
+            if ($index === false || $index < 0 || ! in_array($tag, ['input', 'textarea', 'select'], true)) {
+                continue;
+            }
+
+            $value = $control['value'] ?? '';
+            if (! is_scalar($value) && $value !== null) {
+                continue;
+            }
+
+            $controls[] = [
+                'index' => $index,
+                'tag' => $tag,
+                'type' => substr(strtolower((string) ($control['type'] ?? 'text')), 0, 30),
+                'value' => mb_substr((string) $value, 0, 10000),
+                'checked' => (bool) ($control['checked'] ?? false),
+            ];
+        }
+
+        return $controls;
     }
 }

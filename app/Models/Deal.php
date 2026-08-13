@@ -61,6 +61,7 @@ class Deal extends Model
         'tenant_id',
         'lead_id',
         'title_company_id',
+        'selected_buyer_id',
         'agent_id',
         'title',
         'stage',
@@ -157,6 +158,11 @@ class Deal extends Model
     public function buyerMatches()
     {
         return $this->hasMany(DealBuyerMatch::class);
+    }
+
+    public function selectedBuyer()
+    {
+        return $this->belongsTo(Buyer::class, 'selected_buyer_id');
     }
 
     public function contractors()

@@ -35,6 +35,57 @@ class DealManagementTest extends TestCase
         $response->assertStatus(200);
     }
 
+    public function test_admin_can_select_any_crm_buyer_as_the_official_deal_buyer_and_clear_it(): void
+    {
+        $this->actingAsAdmin();
+        $deal = $this->createDeal();
+        $buyer = Buyer::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'first_name' => 'Janet',
+            'last_name' => 'Buyer',
+            'company' => 'Chosen Homes LLC',
+        ]);
+
+        $this->patch(route('deals.selectBuyer', $deal), ['buyer_id' => $buyer->id])
+            ->assertRedirect();
+
+        $this->assertSame($buyer->id, $deal->fresh()->selected_buyer_id);
+        $this->get(route('deals.show', $deal))
+            ->assertOk()
+            ->assertSee('Buyer for This Deal')
+            ->assertSee('Chosen Homes LLC')
+            ->assertSee('separate from Notify Buyers');
+
+        $this->patch(route('deals.selectBuyer', $deal), ['buyer_id' => null])
+            ->assertRedirect();
+
+        $this->assertNull($deal->fresh()->selected_buyer_id);
+    }
+
+    public function test_matched_buyer_can_be_designated_for_documents_even_when_scores_are_tied(): void
+    {
+        $this->actingAsAdmin();
+        $deal = $this->createDeal();
+        $firstBuyer = Buyer::factory()->create(['tenant_id' => $this->tenant->id, 'company' => 'First Match LLC']);
+        $chosenBuyer = Buyer::factory()->create(['tenant_id' => $this->tenant->id, 'company' => 'Chosen Match LLC']);
+
+        foreach ([$firstBuyer, $chosenBuyer] as $buyer) {
+            DealBuyerMatch::create([
+                'deal_id' => $deal->id,
+                'buyer_id' => $buyer->id,
+                'match_score' => 90,
+            ]);
+        }
+
+        $this->patch(route('deals.selectBuyer', $deal), ['buyer_id' => $chosenBuyer->id])
+            ->assertRedirect();
+
+        $this->assertSame($chosenBuyer->id, $deal->fresh()->selected_buyer_id);
+        $this->get(route('deals.show', $deal))
+            ->assertSee('Chosen Match LLC')
+            ->assertSee('Buyer for this deal');
+    }
+
     public function test_admin_can_update_deal_stage(): void
     {
         $this->actingAsAdmin();

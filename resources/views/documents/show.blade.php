@@ -34,7 +34,7 @@
                 </div>
             </div>
             <div class="card-body">
-                <div style="border: 1px solid #e6e8eb; padding: 30px; background: #fff; min-height: 400px;">
+                <div class="generated-document-content" style="border: 1px solid #e6e8eb; padding: 30px; background: #fff; min-height: 400px;">
                     {!! $document->content !!}
                 </div>
             </div>
@@ -120,3 +120,16 @@
     </div>
 </div>
 @endsection
+
+@push('styles')
+<style>
+    .generated-document-content .footer,
+    .generated-document-content .document-tagline {
+        position: static !important;
+        clear: both;
+        margin-top: clamp(22px, 3vw, 32px) !important;
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+</style>
+@endpush

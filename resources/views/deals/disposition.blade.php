@@ -84,6 +84,21 @@
                             @if($match->buyer_notes)
                             <div class="text-muted small mt-1"><em>{{ $match->buyer_notes }}</em></div>
                             @endif
+                            @if((int) $deal->selected_buyer_id === (int) $match->buyer_id)
+                            <div class="mt-1"><span class="badge bg-green-lt">{{ __('Buyer for this deal') }}</span></div>
+                            @endif
+                        </div>
+                        <div class="col-auto">
+                            @if((int) $deal->selected_buyer_id !== (int) $match->buyer_id)
+                            <form method="POST" action="{{ route('deals.selectBuyer', $deal) }}">
+                                @csrf
+                                @method('PATCH')
+                                <input type="hidden" name="buyer_id" value="{{ $match->buyer_id }}">
+                                <button type="submit" class="btn btn-sm btn-outline-primary">{{ __('Use for Documents') }}</button>
+                            </form>
+                            @else
+                            <button type="button" class="btn btn-sm btn-success" disabled>{{ __('Selected') }}</button>
+                            @endif
                         </div>
                         <div class="col-auto">
                             <select class="form-select form-select-sm outreach-status-select" data-match-id="{{ $match->id }}" style="width: auto;">

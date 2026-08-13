@@ -260,8 +260,21 @@
             margin-top: 12px !important;
         }
 
-        .document-content .footer {
-            margin-top: 20px !important;
+        html body .document-content .footer,
+        html body .document-content .document-tagline {
+            position: static !important;
+            clear: both;
+            margin-top: clamp(22px, 3vw, 30px) !important;
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }
+
+        html body .document-content .seller-disclosure-document .signature-table {
+            margin-top: 10px !important;
+        }
+
+        html body .document-content .seller-disclosure-document .footer {
+            margin-top: 10px !important;
         }
     </style>
 

@@ -7,6 +7,7 @@ use App\Facades\Hooks;
 use App\Http\Requests\DealRequest;
 use App\Models\Activity;
 use App\Models\AuditLog;
+use App\Models\Buyer;
 use App\Models\Contractor;
 use App\Models\Deal;
 use App\Models\DealContractor;
@@ -257,6 +258,7 @@ class DealController extends Controller
             'lead.property',
             'agent',
             'documents',
+            'selectedBuyer',
             'buyerMatches.buyer',
             'activities.agent',
             'contractors.contractor',
@@ -286,8 +288,45 @@ class DealController extends Controller
             ->sortBy(fn ($program) => ($program->lender->name ?? '') . ' ' . $program->program_name);
         $rehabContractors = Contractor::orderBy('name')->get();
         $titleCompanies = TitleCompany::orderBy('name')->get();
+        $buyers = Buyer::query()
+            ->orderBy('company')
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get(['id', 'first_name', 'last_name', 'company', 'phone', 'email']);
 
-        return view('deals.show', compact('deal', 'availableContractors', 'availableLoanPrograms', 'rehabContractors', 'titleCompanies'));
+        return view('deals.show', compact('deal', 'availableContractors', 'availableLoanPrograms', 'rehabContractors', 'titleCompanies', 'buyers'));
+    }
+
+    public function selectBuyer(Request $request, Deal $deal)
+    {
+        $this->authorize('update', $deal);
+
+        $validated = $request->validate([
+            'buyer_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('buyers', 'id')->where('tenant_id', auth()->user()->tenant_id),
+            ],
+        ]);
+
+        $previousBuyerId = $deal->selected_buyer_id;
+        $selectedBuyerId = $validated['buyer_id'] ?? null;
+
+        $deal->update(['selected_buyer_id' => $selectedBuyerId]);
+
+        AuditLog::log(
+            $selectedBuyerId ? 'deal.buyer_selected' : 'deal.buyer_cleared',
+            $deal,
+            ['selected_buyer_id' => $previousBuyerId],
+            ['selected_buyer_id' => $selectedBuyerId],
+        );
+
+        return redirect()->back()->with(
+            'success',
+            $selectedBuyerId
+                ? __('Buyer selected for this deal and its buyer-specific documents.')
+                : __('Buyer selection cleared for this deal.'),
+        );
     }
 
     public function update(DealRequest $request, Deal $deal)

@@ -73,4 +73,30 @@ class DocumentMergeServiceTest extends TestCase
             $rendered,
         );
     }
+
+    public function test_live_preview_control_values_are_persisted_safely_in_document_order(): void
+    {
+        $html = <<<'HTML'
+<input type="text" placeholder="Change Order #">
+<input type="text" value="0.00" placeholder="Additional Cost">
+<label><input type="checkbox"> Owner Request</label>
+<textarea placeholder="Work added"></textarea>
+<select><option value="pending">Pending</option><option value="approved">Approved</option></select>
+HTML;
+
+        $rendered = app(DocumentMergeService::class)->applyPreviewControlValues($html, [
+            ['index' => 0, 'tag' => 'input', 'type' => 'text', 'value' => 'CO-17 & "Final"', 'checked' => false],
+            ['index' => 1, 'tag' => 'input', 'type' => 'text', 'value' => '$4,500.00', 'checked' => false],
+            ['index' => 2, 'tag' => 'input', 'type' => 'checkbox', 'value' => 'on', 'checked' => true],
+            ['index' => 3, 'tag' => 'textarea', 'type' => 'textarea', 'value' => '<script>alert(1)</script> Add cabinets', 'checked' => false],
+            ['index' => 4, 'tag' => 'select', 'type' => 'select-one', 'value' => 'approved', 'checked' => false],
+        ]);
+
+        $this->assertStringContainsString('value="CO-17 &amp; &quot;Final&quot;"', $rendered);
+        $this->assertStringContainsString('value="$4,500.00"', $rendered);
+        $this->assertMatchesRegularExpression('/type="checkbox"[^>]*checked="checked"/i', $rendered);
+        $this->assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt; Add cabinets', $rendered);
+        $this->assertStringNotContainsString('<script>alert(1)</script>', $rendered);
+        $this->assertMatchesRegularExpression('/<option value="approved" selected="selected">Approved<\/option>/i', $rendered);
+    }
 }

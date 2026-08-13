@@ -195,6 +195,61 @@
             </div>
         </div>
 
+        <!-- Buyer selected as the contract party -->
+        <div class="card mb-3" id="deal-buyer-selection">
+            <div class="card-header">
+                <h3 class="card-title">{{ __('Buyer for This Deal') }}</h3>
+                @if($deal->selectedBuyer)
+                    <div class="card-actions">
+                        <span class="badge bg-green-lt">{{ __('Used in buyer-specific documents') }}</span>
+                    </div>
+                @endif
+            </div>
+            <div class="card-body">
+                <p class="text-secondary small mb-3">
+                    {{ __('Select the one official buyer attached to this deal. This controls buyer fields in generated documents and is separate from Notify Buyers.') }}
+                </p>
+                @can('update', $deal)
+                <form method="POST" action="{{ route('deals.selectBuyer', $deal) }}" class="row g-2 align-items-end">
+                    @csrf
+                    @method('PATCH')
+                    <div class="col-md-9">
+                        <label class="form-label" for="selected-buyer-id">{{ __('Buyer from CRM') }}</label>
+                        <select name="buyer_id" id="selected-buyer-id" class="form-select">
+                            <option value="">{{ __('No buyer selected') }}</option>
+                            @foreach($buyers as $buyer)
+                                <option value="{{ $buyer->id }}" {{ (int) $deal->selected_buyer_id === (int) $buyer->id ? 'selected' : '' }}>
+                                    {{ $buyer->company ? $buyer->company.' - ' : '' }}{{ $buyer->full_name }}{{ $buyer->email ? ' ('.$buyer->email.')' : '' }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <button type="submit" class="btn btn-primary w-100">{{ __('Save Buyer') }}</button>
+                    </div>
+                </form>
+                @endcan
+
+                @if($deal->selectedBuyer)
+                    <div class="mt-3">
+                        <strong>{{ $deal->selectedBuyer->company ?: $deal->selectedBuyer->full_name }}</strong>
+                        @if($deal->selectedBuyer->company)
+                            <span class="text-secondary">&middot; {{ $deal->selectedBuyer->full_name }}</span>
+                        @endif
+                        @if($deal->selectedBuyer->phone || $deal->selectedBuyer->email)
+                            <div class="text-secondary small">
+                                {{ $deal->selectedBuyer->phone }}{{ $deal->selectedBuyer->phone && $deal->selectedBuyer->email ? ' | ' : '' }}{{ $deal->selectedBuyer->email }}
+                            </div>
+                        @endif
+                    </div>
+                @else
+                    <div class="alert alert-warning mt-3 mb-0 py-2">
+                        {{ __('No official buyer is selected. Buyer-specific document fields will remain blank until one is selected.') }}
+                    </div>
+                @endif
+            </div>
+        </div>
+
         <!-- Buyer Matches -->
         @if($deal->buyerMatches->count())
         <div class="card mb-3">
@@ -220,6 +275,9 @@
                                     {{ $match->buyer->company ?: $match->buyer->full_name }}
                                 </a>
                                 <div class="text-secondary small">{{ $match->buyer->full_name }}</div>
+                                @if((int) $deal->selected_buyer_id === (int) $match->buyer_id)
+                                    <span class="badge bg-green-lt mt-1">{{ __('Buyer for this deal') }}</span>
+                                @endif
                             </td>
                             <td>
                                 <span class="badge {{ $match->match_score >= 70 ? 'bg-green-lt' : ($match->match_score >= 40 ? 'bg-yellow-lt' : 'bg-red-lt') }}">
@@ -235,6 +293,16 @@
                             <td>
                                 <a href="{{ route('buyers.show', $match->buyer) }}" class="btn btn-sm btn-outline-primary">{{ __('View') }}</a>
                                 <a href="{{ route('deals.notifyBuyers.create', ['deal' => $deal, 'buyer' => $match->buyer_id]) }}" class="btn btn-sm btn-outline-success">{{ __('Notify') }}</a>
+                                @can('update', $deal)
+                                    @if((int) $deal->selected_buyer_id !== (int) $match->buyer_id)
+                                    <form method="POST" action="{{ route('deals.selectBuyer', $deal) }}" class="d-inline">
+                                        @csrf
+                                        @method('PATCH')
+                                        <input type="hidden" name="buyer_id" value="{{ $match->buyer_id }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary">{{ __('Use for Documents') }}</button>
+                                    </form>
+                                    @endif
+                                @endcan
                                 @if($match->notified_at)
                                     <span class="badge bg-green-lt">{{ __('Last sent') }} {{ $match->notified_at->diffForHumans() }}</span>
                                 @endif

@@ -46,13 +46,19 @@
                 @if($templates->count())
                 <form method="POST" action="{{ route('documents.store', $deal) }}" id="generate-form">
                     @csrf
+                    <input type="hidden" name="preview_controls" id="preview-controls-input" value="">
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <label class="form-label required">{{ __('Select Template') }}</label>
                             <select name="template_id" id="template-select" class="form-select" required>
                                 <option value="">{{ __('Choose a template...') }}</option>
                                 @foreach($templates as $template)
-                                    <option value="{{ $template->id }}" data-type="{{ $template->type }}" data-input-fields='@json($template->input_fields ?? [])' data-edit-url="{{ route('document-templates.edit', $template) }}">
+                                    @php
+                                        $needsSelectedBuyer = collect($template->merge_fields ?? [])->contains(
+                                            fn ($field) => str_starts_with((string) $field, 'buyer.')
+                                        ) || str_contains((string) $template->content, '{{buyer.');
+                                    @endphp
+                                    <option value="{{ $template->id }}" data-type="{{ $template->type }}" data-needs-buyer="{{ $needsSelectedBuyer ? '1' : '0' }}" data-input-fields='@json($template->input_fields ?? [])' data-edit-url="{{ route('document-templates.edit', $template) }}">
                                         {{ $template->name }}
                                         ({{ \App\Models\DocumentTemplate::typeLabel($template->type) }})
                                         {{ $template->is_default ? ' *' : '' }}
@@ -64,6 +70,10 @@
                             <label class="form-label">{{ __('Document Name') }} <small class="text-secondary">({{ __('optional') }})</small></label>
                             <input type="text" name="name" class="form-control" placeholder="{{ __('Auto-generated from template + deal name') }}">
                         </div>
+                    </div>
+                    <div class="alert alert-warning py-2 mb-3" id="selected-buyer-warning" style="display:none;">
+                        {{ __('This template uses buyer information. Select the Buyer for This Deal before generating it.') }}
+                        <a href="{{ route('deals.show', $deal) }}#deal-buyer-selection" class="alert-link">{{ __('Select buyer') }}</a>
                     </div>
                     @if($contractors->isNotEmpty())
                     <div class="mb-3" id="contractor-field-wrap" style="display:none;">
@@ -127,7 +137,7 @@
                     <div class="spinner-border text-primary" role="status"></div>
                     <p class="text-secondary mt-2">{{ __('Loading preview...') }}</p>
                 </div>
-                <div id="preview-content" style="border: 1px solid #e6e8eb; padding: 20px; background: #fff; min-height: 200px;"></div>
+                <div id="preview-content" class="generated-document-content" style="border: 1px solid #e6e8eb; padding: 20px; background: #fff; min-height: 200px;"></div>
             </div>
         </div>
     </div>
@@ -205,13 +215,13 @@
                     @endif
                 </div>
                 <div class="mb-3">
-                    <h4 class="text-secondary mb-1">{{ __('Buyer (Top Match)') }}</h4>
-                    @php $topBuyer = $deal->buyerMatches->sortByDesc('match_score')->first(); @endphp
-                    @if($topBuyer && $topBuyer->buyer)
-                        <div>{{ $topBuyer->buyer->first_name }} {{ $topBuyer->buyer->last_name }}</div>
-                        <div class="text-secondary small">{{ $topBuyer->buyer->company }}</div>
+                    <h4 class="text-secondary mb-1">{{ __('Buyer for Documents') }}</h4>
+                    @if($deal->selectedBuyer)
+                        <div>{{ $deal->selectedBuyer->first_name }} {{ $deal->selectedBuyer->last_name }}</div>
+                        <div class="text-secondary small">{{ $deal->selectedBuyer->company }}</div>
                     @else
-                        <span class="text-warning">{{ __('No buyer matched') }}</span>
+                        <span class="text-warning">{{ __('No buyer selected') }}</span>
+                        <div><a href="{{ route('deals.show', $deal) }}#deal-buyer-selection" class="small">{{ __('Select buyer for this deal') }}</a></div>
                     @endif
                 </div>
                 <div class="mb-3">
@@ -253,10 +263,24 @@
 </div>
 @endsection
 
+@push('styles')
+<style>
+    .generated-document-content .footer,
+    .generated-document-content .document-tagline {
+        position: static !important;
+        clear: both;
+        margin-top: clamp(22px, 3vw, 32px) !important;
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+</style>
+@endpush
+
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     var templateSelect = document.getElementById('template-select');
+    var generateForm = document.getElementById('generate-form');
     var generateBtn = document.getElementById('generate-btn');
     var previewBtn = document.getElementById('preview-deal-btn');
     var previewCard = document.getElementById('preview-card');
@@ -267,38 +291,46 @@ document.addEventListener('DOMContentLoaded', function() {
     var inputsWrap = document.getElementById('document-inputs-wrap');
     var inputsContainer = document.getElementById('document-inputs');
     var masterEditButton = document.getElementById('edit-master-template-btn');
+    var previewControlsInput = document.getElementById('preview-controls-input');
+    var selectedBuyerWarning = document.getElementById('selected-buyer-warning');
+    var hasSelectedBuyer = {{ $deal->selectedBuyer ? 'true' : 'false' }};
     var csrfToken = document.querySelector('meta[name="csrf-token"]').content;
     var previewRequestId = 0;
 
     // Enable/disable buttons on template select
     templateSelect.addEventListener('change', function() {
         var hasValue = !!this.value;
-        generateBtn.disabled = !hasValue;
+        var selectedOption = this.options[this.selectedIndex];
+        var buyerRequired = hasValue && selectedOption.dataset.needsBuyer === '1';
+        var buyerMissing = buyerRequired && !hasSelectedBuyer;
+        generateBtn.disabled = !hasValue || buyerMissing;
         previewBtn.disabled = !hasValue;
+        selectedBuyerWarning.style.display = buyerMissing ? 'block' : 'none';
 
         if (hasValue) {
             renderDocumentInputs(this.options[this.selectedIndex]);
             updateContractorVisibility();
-            loadPreview(this.value);
+            loadPreview(this.value, false);
         } else {
             inputsWrap.style.display = 'none';
             inputsContainer.innerHTML = '';
             if (contractorFieldWrap) contractorFieldWrap.style.display = 'none';
             if (masterEditButton) masterEditButton.classList.add('d-none');
+            selectedBuyerWarning.style.display = 'none';
         }
     });
 
     // Preview button
     previewBtn.addEventListener('click', function() {
         if (templateSelect.value) {
-            loadPreview(templateSelect.value);
+            loadPreview(templateSelect.value, true);
         }
     });
 
     if (contractorSelect) {
         contractorSelect.addEventListener('change', function() {
             if (templateSelect.value) {
-                loadPreview(templateSelect.value);
+                loadPreview(templateSelect.value, true);
             }
         });
     }
@@ -323,7 +355,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 (field.options || []).forEach(function(value) {
                     var wrap = document.createElement('label'); wrap.className = 'form-check form-check-inline';
                     var radio = document.createElement('input'); radio.type = 'radio'; radio.className = 'form-check-input'; radio.name = 'document_inputs[' + field.key + ']'; radio.value = value; radio.dataset.documentInput = 'true';
-                    radio.addEventListener('change', function() { if (templateSelect.value) loadPreview(templateSelect.value); });
+                    radio.addEventListener('change', function() { if (templateSelect.value) loadPreview(templateSelect.value, true); });
                     var text = document.createElement('span'); text.className = 'form-check-label'; text.textContent = value;
                     wrap.appendChild(radio); wrap.appendChild(text); radioGroup.appendChild(wrap);
                 });
@@ -342,7 +374,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             input.name = 'document_inputs[' + field.key + ']';
             input.dataset.documentInput = 'true';
-            input.addEventListener('change', function() { if (templateSelect.value) loadPreview(templateSelect.value); });
+            input.addEventListener('change', function() { if (templateSelect.value) loadPreview(templateSelect.value, true); });
             column.appendChild(input);
             inputsContainer.appendChild(column);
         });
@@ -371,7 +403,14 @@ document.addEventListener('DOMContentLoaded', function() {
         previewCard.style.display = 'none';
     });
 
-    function loadPreview(templateId) {
+    if (generateForm) {
+        generateForm.addEventListener('submit', function() {
+            previewControlsInput.value = JSON.stringify(collectPreviewControls());
+        });
+    }
+
+    function loadPreview(templateId, preserveControls) {
+        var preservedControls = preserveControls ? collectPreviewControls() : [];
         var requestId = ++previewRequestId;
         previewCard.style.display = 'block';
         previewLoading.style.display = previewContent.innerHTML.trim() ? 'none' : 'block';
@@ -394,7 +433,10 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(function(data) {
             if (requestId !== previewRequestId) return;
             previewLoading.style.display = 'none';
-            if (data.html) previewContent.innerHTML = data.html;
+            if (data.html) {
+                previewContent.innerHTML = data.html;
+                restorePreviewControls(preservedControls);
+            }
             previewContent.style.opacity = '1';
         })
         .catch(function() {
@@ -404,6 +446,34 @@ document.addEventListener('DOMContentLoaded', function() {
                 previewContent.innerHTML = '<div class="alert alert-danger">{{ __('Failed to load preview.') }}</div>';
             }
             previewContent.style.opacity = '1';
+        });
+    }
+
+    function collectPreviewControls() {
+        return Array.prototype.map.call(
+            previewContent.querySelectorAll('input, textarea, select'),
+            function(control, index) {
+                return {
+                    index: index,
+                    tag: control.tagName.toLowerCase(),
+                    type: (control.type || '').toLowerCase(),
+                    value: control.value || '',
+                    checked: !!control.checked
+                };
+            }
+        );
+    }
+
+    function restorePreviewControls(controls) {
+        var elements = previewContent.querySelectorAll('input, textarea, select');
+        controls.forEach(function(saved) {
+            var control = elements[saved.index];
+            if (!control || control.tagName.toLowerCase() !== saved.tag) return;
+
+            control.value = saved.value;
+            if (saved.type === 'checkbox' || saved.type === 'radio') {
+                control.checked = !!saved.checked;
+            }
         });
     }
 

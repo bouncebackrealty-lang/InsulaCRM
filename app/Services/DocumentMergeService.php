@@ -26,11 +26,10 @@ class DocumentMergeService
     public function merge(string $template, Deal $deal, ?Contractor $contractor = null, array $documentInputs = []): string
     {
         // Eager load relationships
-        $deal->loadMissing(['lead.property', 'tenant', 'lenders.lender', 'titleCompany']);
+        $deal->loadMissing(['lead.property', 'tenant', 'lenders.lender', 'titleCompany', 'selectedBuyer']);
 
         // Resolve the best buyer match for the deal
-        $buyerMatch = $deal->buyerMatches()->with('buyer')->orderByDesc('match_score')->first();
-        $buyer = $buyerMatch?->buyer;
+        $buyer = $deal->selectedBuyer;
 
         $tenant = $deal->tenant ?? auth()->user()->tenant;
         $lead = $deal->lead;
@@ -73,6 +72,136 @@ class DocumentMergeService
         }, $template);
 
         return $this->normalizeDuplicateCurrencySymbols($rendered);
+    }
+
+    /**
+     * @param  array<int, array{index:int, tag:string, type?:string, value?:string, checked?:bool}>  $controls
+     */
+    public function applyPreviewControlValues(string $html, array $controls): string
+    {
+        if ($controls === []) {
+            return $html;
+        }
+
+        $controlsByIndex = [];
+        foreach ($controls as $control) {
+            if (isset($control['index']) && is_int($control['index'])) {
+                $controlsByIndex[$control['index']] = $control;
+            }
+        }
+
+        $index = 0;
+        $rendered = preg_replace_callback(
+            '/<input\b[^>]*>|<textarea\b[^>]*>.*?<\/textarea>|<select\b[^>]*>.*?<\/select>/is',
+            function (array $match) use (&$index, $controlsByIndex): string {
+                $currentIndex = $index++;
+                $control = $controlsByIndex[$currentIndex] ?? null;
+
+                if (! $control || ! preg_match('/^<\s*(input|textarea|select)\b/i', $match[0], $tagMatch)) {
+                    return $match[0];
+                }
+
+                $tag = strtolower($tagMatch[1]);
+                if (($control['tag'] ?? '') !== $tag) {
+                    return $match[0];
+                }
+
+                $value = (string) ($control['value'] ?? '');
+
+                if ($tag === 'textarea') {
+                    $escaped = e($value);
+
+                    return preg_replace_callback(
+                        '/^(<textarea\b[^>]*>).*?(<\/textarea>)$/is',
+                        static fn (array $parts): string => $parts[1].$escaped.$parts[2],
+                        $match[0],
+                        1,
+                    ) ?? $match[0];
+                }
+
+                if ($tag === 'select') {
+                    return $this->setSelectedOption($match[0], $value);
+                }
+
+                $input = $this->setHtmlAttribute($match[0], 'value', $value);
+                $type = strtolower((string) ($control['type'] ?? 'text'));
+
+                if (in_array($type, ['checkbox', 'radio'], true)) {
+                    $input = $this->removeHtmlAttribute($input, 'checked');
+                    if ((bool) ($control['checked'] ?? false)) {
+                        $input = $this->setHtmlAttribute($input, 'checked', 'checked');
+                    }
+                }
+
+                return $input;
+            },
+            $html,
+        );
+
+        return $rendered ?? $html;
+    }
+
+    private function setSelectedOption(string $select, string $selectedValue): string
+    {
+        return preg_replace_callback(
+            '/<option\b[^>]*>.*?<\/option>/is',
+            function (array $match) use ($selectedValue): string {
+                $option = $this->removeHtmlAttribute($match[0], 'selected');
+                $value = null;
+
+                if (preg_match('/\svalue\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+))/i', $option, $valueMatch)) {
+                    $value = html_entity_decode($valueMatch[1] ?: ($valueMatch[2] ?: $valueMatch[3]), ENT_QUOTES, 'UTF-8');
+                }
+
+                if ($value === null) {
+                    $value = trim(strip_tags($option));
+                }
+
+                if ($value !== $selectedValue) {
+                    return $option;
+                }
+
+                return preg_replace_callback(
+                    '/^<option\b[^>]*>/i',
+                    fn (array $opening): string => $this->setHtmlAttribute($opening[0], 'selected', 'selected'),
+                    $option,
+                    1,
+                ) ?? $option;
+            },
+            $select,
+        ) ?? $select;
+    }
+
+    private function setHtmlAttribute(string $tag, string $name, string $value): string
+    {
+        $escaped = e($value);
+        $attribute = ' '.$name.'="'.$escaped.'"';
+        $pattern = '/\s+'.preg_quote($name, '/').'\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s>]+)/i';
+
+        if (preg_match($pattern, $tag)) {
+            return preg_replace_callback(
+                $pattern,
+                static fn (): string => $attribute,
+                $tag,
+                1,
+            ) ?? $tag;
+        }
+
+        return preg_replace_callback(
+            '/(\s*\/?>)$/',
+            static fn (array $ending): string => $attribute.$ending[1],
+            $tag,
+            1,
+        ) ?? $tag;
+    }
+
+    private function removeHtmlAttribute(string $tag, string $name): string
+    {
+        return preg_replace(
+            '/\s+'.preg_quote($name, '/').'(?:\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s>]+))?/i',
+            '',
+            $tag,
+        ) ?? $tag;
     }
 
     private function setProofOfFundsCheckboxValues(array &$data): void

@@ -174,22 +174,36 @@ class DocumentGenerationTest extends TestCase
         $this->assertStringNotContainsString('2026-08-10', $rendered);
     }
 
-    public function test_loi_buyer_line_uses_the_company_instead_of_a_matched_buyer(): void
+    public function test_buyer_fields_use_the_manually_selected_buyer_instead_of_the_top_match(): void
     {
         $this->actingAsAdmin();
         $deal = $this->createDeal();
-        $buyer = Buyer::factory()->create([
+        $topMatch = Buyer::factory()->create([
             'tenant_id' => $this->tenant->id,
             'company' => 'Top Match Investments',
         ]);
+        $selectedBuyer = Buyer::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'company' => 'Client Selected Homes LLC',
+        ]);
         DealBuyerMatch::create([
             'deal_id' => $deal->id,
-            'buyer_id' => $buyer->id,
+            'buyer_id' => $topMatch->id,
             'match_score' => 99,
         ]);
+        DealBuyerMatch::create([
+            'deal_id' => $deal->id,
+            'buyer_id' => $selectedBuyer->id,
+            'match_score' => 90,
+        ]);
+        $deal->update(['selected_buyer_id' => $selectedBuyer->id]);
 
         $service = app(DocumentMergeService::class);
         $this->assertStringContainsString(
+            'Client Selected Homes LLC',
+            $service->merge('<p>{{buyer.top_match}}</p>', $deal),
+        );
+        $this->assertStringNotContainsString(
             'Top Match Investments',
             $service->merge('<p>{{buyer.top_match}}</p>', $deal),
         );
@@ -524,7 +538,10 @@ HTML,
         ]);
         DealBuyerMatch::create(['deal_id' => $deal->id, 'buyer_id' => $buyer->id, 'match_score' => 99]);
         $titleCompany = TitleCompany::create(['tenant_id' => $this->tenant->id, 'name' => 'Peachtree Title', 'closing_attorney' => 'Avery Stone', 'address' => '10 Main St', 'city' => 'Atlanta', 'state' => 'GA', 'zip_code' => '30303']);
-        $deal->update(['title_company_id' => $titleCompany->id]);
+        $deal->update([
+            'title_company_id' => $titleCompany->id,
+            'selected_buyer_id' => $buyer->id,
+        ]);
         $lender = Lender::create(['tenant_id' => $this->tenant->id, 'name' => 'Capital Funding']);
         $program = LenderLoanProgram::create(['tenant_id' => $this->tenant->id, 'lender_id' => $lender->id, 'program_name' => 'Bridge']);
         DealLender::create(['deal_id' => $deal->id, 'lender_id' => $lender->id, 'lender_loan_program_id' => $program->id]);
@@ -612,7 +629,10 @@ HTML,
             'name' => 'Peachtree Title',
             'closing_attorney' => 'Alex Morgan',
         ]);
-        $deal->update(['title_company_id' => $titleCompany->id]);
+        $deal->update([
+            'title_company_id' => $titleCompany->id,
+            'selected_buyer_id' => $buyer->id,
+        ]);
 
         $renderedAssignment = app(DocumentMergeService::class)->merge(
             $templates[0]->fresh()->content,
@@ -705,7 +725,7 @@ HTML,
         $this->assertSame(2, substr_count($templates['4C-02-Partial Lien Waiver']->fresh()->content, '{{input.document_date}}'));
     }
 
-    public function test_change_order_property_address_is_sized_to_fit_the_pdf_cell(): void
+    public function test_change_order_property_address_uses_a_readable_full_width_row(): void
     {
         $this->actingAsAdmin();
 
@@ -715,20 +735,79 @@ HTML,
             'type' => 'other',
             'input_fields' => [],
             'content' => '<table><tr>'
+                .'<td><strong>Date</strong></td><td><input value="{{input.document_date}}"></td>'
                 .'<td><strong>Property Address</strong></td>'
                 .'<td><input type="text" style="width: 95%; border: none; font-size: 1em;" value="{{property.full_address}}"></td>'
-                .'</tr></table>',
+                .'</tr></table><p style="text-align:center;">Every Move Starts with Strategy</p>',
         ]);
 
         $migration = require database_path('migrations/2026_08_12_000015_fit_change_order_property_address.php');
         $migration->up();
+        $repairMigration = require database_path('migrations/2026_08_13_000017_repair_change_order_and_taglines.php');
+        $repairMigration->up();
 
         $content = $template->fresh()->content;
 
         $this->assertStringContainsString('width: 100%;', $content);
-        $this->assertStringContainsString('font-size: 0.62em;', $content);
+        $this->assertStringContainsString('font-size: 1em;', $content);
+        $this->assertStringNotContainsString('font-size: 0.62em;', $content);
         $this->assertStringContainsString('box-sizing: border-box;', $content);
+        $this->assertSame(2, substr_count($content, 'colspan="3"'));
         $this->assertStringContainsString('{{property.full_address}}', $content);
+        $this->assertStringContainsString('class="document-tagline"', $content);
+    }
+
+    public function test_change_order_preview_values_are_saved_in_the_generated_document(): void
+    {
+        $this->actingAsAdmin();
+        $deal = $this->createDeal();
+        $template = DocumentTemplate::create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'Change Order persistence test',
+            'type' => 'other',
+            'content' => '<input type="text" placeholder="Change Order #">'
+                .'<label><input type="checkbox"> Owner Request</label>'
+                .'<textarea placeholder="Work added"></textarea>',
+        ]);
+
+        $response = $this->post(route('documents.store', $deal), [
+            'template_id' => $template->id,
+            'preview_controls' => json_encode([
+                ['index' => 0, 'tag' => 'input', 'type' => 'text', 'value' => 'CO-2026-17', 'checked' => false],
+                ['index' => 1, 'tag' => 'input', 'type' => 'checkbox', 'value' => 'on', 'checked' => true],
+                ['index' => 2, 'tag' => 'textarea', 'type' => 'textarea', 'value' => 'Add two kitchen cabinets', 'checked' => false],
+            ], JSON_THROW_ON_ERROR),
+        ]);
+
+        $document = GeneratedDocument::latest('id')->firstOrFail();
+        $response->assertRedirect(route('documents.show', $document));
+        $this->assertStringContainsString('value="CO-2026-17"', $document->content);
+        $this->assertMatchesRegularExpression('/type="checkbox"[^>]*checked="checked"/i', $document->content);
+        $this->assertStringContainsString('Add two kitchen cabinets', $document->content);
+    }
+
+    public function test_buyer_specific_document_requires_an_explicit_deal_buyer(): void
+    {
+        $this->actingAsAdmin();
+        $deal = $this->createDeal();
+        $template = DocumentTemplate::create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'Buyer-specific assignment',
+            'type' => 'assignment_contract',
+            'merge_fields' => ['buyer.full_name'],
+            'content' => '<p>{{buyer.full_name}}</p>',
+        ]);
+
+        $this->post(route('documents.store', $deal), ['template_id' => $template->id])
+            ->assertSessionHasErrors('template_id');
+
+        $buyer = Buyer::factory()->create(['tenant_id' => $this->tenant->id]);
+        $deal->update(['selected_buyer_id' => $buyer->id]);
+
+        $this->post(route('documents.store', $deal), ['template_id' => $template->id])
+            ->assertRedirect();
+
+        $this->assertStringContainsString($buyer->full_name, GeneratedDocument::latest('id')->value('content'));
     }
 
     public function test_investor_packet_uses_saved_comparable_sale_data_for_arv_and_comp_rows(): void
