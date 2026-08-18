@@ -111,6 +111,29 @@
                         </div>
                     </div>
                     <div class="datagrid-item">
+                        <div class="datagrid-title">{{ __('Title Company / Closing Attorney') }}</div>
+                        <div class="datagrid-content">
+                            @if($deal->titleCompany)
+                                <div>{{ $deal->titleCompany->name }}</div>
+                                @if($deal->titleCompany->closing_attorney)
+                                    <div class="text-secondary small">{{ $deal->titleCompany->closing_attorney }}</div>
+                                @endif
+                            @else
+                                <span class="text-secondary">{{ __('Not selected') }}</span>
+                            @endif
+                        </div>
+                    </div>
+                    <div class="datagrid-item">
+                        <div class="datagrid-title">{{ __('Title Status') }}</div>
+                        <div class="datagrid-content">
+                            @if($deal->title_status)
+                                <span class="badge bg-blue-lt">{{ $deal->title_status_label }}</span>
+                            @else
+                                <span class="text-secondary">{{ __('Not Set') }}</span>
+                            @endif
+                        </div>
+                    </div>
+                    <div class="datagrid-item">
                         <div class="datagrid-title">{{ __('Contract Price') }}</div>
                         <div class="datagrid-content">{{ Fmt::currency($deal->contract_price) }}</div>
                     </div>
@@ -1003,6 +1026,16 @@
                             @endforeach
                         </select>
                         <div class="form-hint">{{ __('Select once to use the company and attorney in generated documents.') }} <a href="{{ route('title-companies.create') }}">{{ __('Add new') }}</a></div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">{{ __('Title Status') }}</label>
+                        <select name="title_status" class="form-select form-select-sm">
+                            <option value="">{{ __('Not Set') }}</option>
+                            @foreach(\App\Models\Deal::titleStatuses() as $statusKey => $statusLabel)
+                                <option value="{{ $statusKey }}" {{ $deal->title_status === $statusKey ? 'selected' : '' }}>{{ $statusLabel }}</option>
+                            @endforeach
+                        </select>
+                        <div class="form-hint">{{ __('Update manually as the transaction progresses.') }}</div>
                     </div>
                     <div class="mb-2">
                         <label class="form-label">{{ __('Deal Type') }}</label>

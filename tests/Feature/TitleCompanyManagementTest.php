@@ -27,13 +27,30 @@ class TitleCompanyManagementTest extends TestCase
         $deal = $this->createDeal();
         $this->putJson(route('deals.update', $deal), [
             'title_company_id' => $titleCompany->id,
+            'title_status' => 'title_review',
         ])->assertOk()->assertJsonPath('deal.title_company_id', $titleCompany->id);
 
         $this->assertSame($titleCompany->id, $deal->fresh()->title_company_id);
+        $this->assertSame('title_review', $deal->fresh()->title_status);
         $this->get(route('deals.show', $deal))
             ->assertOk()
             ->assertSee('Title Company / Closing Attorney')
             ->assertSee('Peachtree Title')
-            ->assertSee('Avery Stone');
+            ->assertSee('Avery Stone')
+            ->assertSee('Title Status')
+            ->assertSee('Title Review');
+    }
+
+    public function test_title_status_only_accepts_the_supported_deal_statuses(): void
+    {
+        $this->actingAsAdmin();
+        $deal = $this->createDeal();
+
+        $this->putJson(route('deals.update', $deal), [
+            'title_status' => 'in_progress',
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['title_status']);
+
+        $this->assertNull($deal->fresh()->title_status);
     }
 }

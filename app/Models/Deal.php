@@ -33,6 +33,15 @@ class Deal extends Model
         'other' => 'Other',
     ];
 
+    public const TITLE_STATUSES = [
+        'selected' => 'Selected',
+        'title_opened' => 'Title Opened',
+        'title_review' => 'Title Review',
+        'clear_to_close' => 'Clear to Close',
+        'closed' => 'Closed',
+        'cancelled' => 'Cancelled',
+    ];
+
     /**
      * Get pipeline stages for the current tenant's business mode.
      */
@@ -61,6 +70,7 @@ class Deal extends Model
         'tenant_id',
         'lead_id',
         'title_company_id',
+        'title_status',
         'selected_buyer_id',
         'agent_id',
         'title',
@@ -112,6 +122,16 @@ class Deal extends Model
     public static function dealTypes(): array
     {
         return self::DEAL_TYPES;
+    }
+
+    public static function titleStatuses(): array
+    {
+        return self::TITLE_STATUSES;
+    }
+
+    public function getTitleStatusLabelAttribute(): string
+    {
+        return self::TITLE_STATUSES[$this->title_status] ?? __('Not Set');
     }
 
     public function getDealTypeLabelAttribute(): string
