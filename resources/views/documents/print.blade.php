@@ -116,7 +116,6 @@
         .document-content table td,
         .document-content table th {
             padding: 8px;
-            border: 1px solid #ddd;
             text-align: left;
         }
 
@@ -136,6 +135,12 @@
         }
 
         /* ── Print Styles ────────────────────────── */
+        /* Keep direct PDF downloads consistently sized on US Letter paper. */
+        @page {
+            size: letter;
+            margin: 0.55in;
+        }
+
         @media print {
             .print-controls {
                 display: none !important;
@@ -152,12 +157,6 @@
                 box-shadow: none;
                 max-width: none;
                 min-height: auto;
-            }
-
-            /* Page setup */
-            @page {
-                size: letter;
-                margin: 0.75in;
             }
 
             /* Avoid breaking inside important elements */
@@ -177,14 +176,16 @@
     </style>
 </head>
 <body>
-    {{-- Screen-only toolbar --}}
-    <div class="print-controls">
-        <span class="doc-title">{{ $documentName ?? __('Document') }}</span>
-        <div>
-            <button class="btn btn-secondary" onclick="window.close()">{{ __('Close') }}</button>
-            <button class="btn btn-primary" onclick="window.print()">{{ __('Print / Save PDF') }}</button>
+    @if ($showControls ?? true)
+        {{-- Screen-only toolbar --}}
+        <div class="print-controls">
+            <span class="doc-title">{{ $documentName ?? __('Document') }}</span>
+            <div>
+                <button class="btn btn-secondary" onclick="window.close()">{{ __('Close') }}</button>
+                <button class="btn btn-primary" onclick="window.print()">{{ __('Print / Save PDF') }}</button>
+            </div>
         </div>
-    </div>
+    @endif
 
     <div class="document-container">
         <div class="document-content">
@@ -192,13 +193,100 @@
         </div>
     </div>
 
-    <script>
-        // Auto-trigger print dialog after a brief delay for rendering
-        window.addEventListener('load', function() {
-            setTimeout(function() {
-                window.print();
-            }, 500);
-        });
-    </script>
+    {{--
+        Saved templates can include their own screen-oriented styles. These PDF-only
+        overrides run after that content so direct downloads have efficient, consistent
+        Letter-page spacing without altering the on-screen document view.
+    --}}
+    <style media="print">
+        .document-content > .document-container {
+            max-width: none !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        .document-content .header {
+            margin-bottom: 12px !important;
+        }
+
+        .document-content .logo-box {
+            padding: 10px 20px !important;
+        }
+
+        .document-content .logo {
+            max-width: 54px !important;
+        }
+
+        .document-content .company-title {
+            font-size: 23px !important;
+        }
+
+        .document-content .doc-title {
+            margin-top: 10px !important;
+        }
+
+        .document-content .divider-line {
+            margin: 10px 0 16px !important;
+        }
+
+        .document-content h1,
+        .document-content h2,
+        .document-content h3,
+        .document-content h4 {
+            margin-top: 14px !important;
+            margin-bottom: 6px !important;
+        }
+
+        .document-content p {
+            margin: 5px 0 !important;
+            line-height: 1.4 !important;
+        }
+
+        .document-content table {
+            margin: 6px 0 !important;
+        }
+
+        .document-content table td,
+        .document-content table th {
+            padding: 5px !important;
+        }
+
+        .document-content .signature-table {
+            margin-top: 18px !important;
+        }
+
+        .document-content .signature-field {
+            margin-top: 12px !important;
+        }
+
+        html body .document-content .footer,
+        html body .document-content .document-tagline {
+            position: static !important;
+            clear: both;
+            margin-top: clamp(22px, 3vw, 30px) !important;
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }
+
+        html body .document-content .seller-disclosure-document .signature-table {
+            margin-top: 10px !important;
+        }
+
+        html body .document-content .seller-disclosure-document .footer {
+            margin-top: 10px !important;
+        }
+    </style>
+
+    @if ($autoPrint ?? true)
+        <script>
+            // Auto-trigger print dialog after a brief delay for rendering
+            window.addEventListener('load', function() {
+                setTimeout(function() {
+                    window.print();
+                }, 500);
+            });
+        </script>
+    @endif
 </body>
 </html>

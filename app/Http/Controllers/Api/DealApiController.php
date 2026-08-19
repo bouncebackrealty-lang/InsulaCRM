@@ -10,6 +10,7 @@ use App\Events\DealStageChanged;
 use App\Facades\Hooks;
 use App\Services\BusinessModeService;
 use App\Services\BuyerMatchService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -98,6 +99,10 @@ class DealApiController extends Controller
         $data['stage'] = $data['stage'] ?? \App\Services\BusinessModeService::getDefaultStage();
         $data['stage_changed_at'] = now();
 
+        if (! $isRE) {
+            $data = $this->applyWholesaleContractDefaults($data);
+        }
+
         // Verify lead belongs to tenant
         $lead = \App\Models\Lead::withoutGlobalScopes()
             ->where('tenant_id', $tenant->id)
@@ -158,6 +163,10 @@ class DealApiController extends Controller
 
         $data = $validator->validated();
 
+        if (! $isRE) {
+            $data = $this->applyWholesaleContractDefaults($data, $deal);
+        }
+
         // Handle stage change
         if (isset($data['stage']) && $data['stage'] !== $deal->stage) {
             $oldStage = $deal->stage;
@@ -193,5 +202,52 @@ class DealApiController extends Controller
     public function stages()
     {
         return response()->json(Deal::stages());
+    }
+
+    /**
+     * Apply the same editable due-diligence defaults used by the web pipeline.
+     * The API may set a custom period, but a wholesale deal entering Under
+     * Contract always receives a usable 10-business-day default when omitted.
+     */
+    private function applyWholesaleContractDefaults(array $data, ?Deal $deal = null): array
+    {
+        $stage = $data['stage'] ?? $deal?->stage;
+
+        if ($stage !== 'under_contract') {
+            return $data;
+        }
+
+        $contractDate = array_key_exists('contract_date', $data)
+            ? ($data['contract_date'] ? Carbon::parse($data['contract_date']) : null)
+            : $deal?->contract_date;
+        $contractDate ??= now()->startOfDay();
+
+        $inspectionDays = array_key_exists('inspection_period_days', $data)
+            ? (int) $data['inspection_period_days']
+            : (int) ($deal?->inspection_period_days ?: 10);
+
+        $data['contract_date'] = $contractDate;
+        $data['inspection_period_days'] = $inspectionDays;
+        $data['due_diligence_end_date'] = $inspectionDays > 0
+            ? $this->addBusinessDays($contractDate, $inspectionDays)
+            : null;
+
+        return $data;
+    }
+
+    private function addBusinessDays(Carbon $startDate, int $days): Carbon
+    {
+        $date = $startDate->copy()->startOfDay();
+        $added = 0;
+
+        while ($added < $days) {
+            $date->addDay();
+
+            if (! $date->isWeekend()) {
+                $added++;
+            }
+        }
+
+        return $date;
     }
 }

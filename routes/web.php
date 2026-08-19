@@ -5,12 +5,17 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\BuyerController;
+use App\Http\Controllers\BuyerNotificationController;
+use App\Http\Controllers\BuyerPhotoGalleryController;
+use App\Http\Controllers\ContractorController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DncController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\DealController;
 use App\Http\Controllers\LeadController;
+use App\Http\Controllers\LenderController;
+use App\Http\Controllers\TitleCompanyController;
 use App\Http\Controllers\ListController;
 use App\Http\Controllers\PluginController;
 use App\Http\Controllers\PropertyController;
@@ -89,6 +94,9 @@ Route::get('/p/{slug}', [BuyerPortalController::class, 'show'])->name('buyer-por
 Route::post('/p/{slug}/register', [BuyerPortalController::class, 'register'])->middleware('throttle:10,1')->name('buyer-portal.register');
 Route::get('/p/{slug}/registered', [BuyerPortalController::class, 'registered'])->name('buyer-portal.registered');
 Route::get('/p/{slug}/properties', [BuyerPortalController::class, 'properties'])->name('buyer-portal.properties');
+Route::get('/buyer-photo-gallery/{lead}', [BuyerPhotoGalleryController::class, 'show'])
+    ->middleware('signed')
+    ->name('buyer-photo-gallery.show');
 
 // Offline fallback (PWA)
 Route::get('/offline', fn () => view('offline'))->name('offline');
@@ -293,9 +301,28 @@ Route::middleware(['auth', 'tenant', 'require2fa'])->group(function () {
         Route::put('/pipeline/{deal}', [DealController::class, 'update'])->name('deals.update');
         Route::patch('/pipeline/{deal}', [DealController::class, 'update'])->name('deals.quickUpdate');
         Route::patch('/pipeline/{deal}/stage', [DealController::class, 'updateStage'])->name('deals.updateStage');
+        Route::patch('/pipeline/{deal}/priority', [DealController::class, 'togglePriority'])->name('deals.togglePriority');
+        Route::patch('/pipeline/{deal}/buyer', [DealController::class, 'selectBuyer'])->name('deals.selectBuyer');
         Route::post('/pipeline/{deal}/documents', [DealController::class, 'uploadDocument'])->name('deals.uploadDocument');
         Route::get('/pipeline/documents/{document}/download', [DealController::class, 'downloadDocument'])->name('deals.downloadDocument');
-        Route::post('/pipeline/{deal}/notify-buyer/{match}', [DealController::class, 'notifyBuyer'])->name('deals.notifyBuyer');
+        Route::delete('/pipeline/{deal}/documents/{document}', [DealController::class, 'destroyDocument'])->name('deals.destroyDocument');
+        Route::get('/pipeline/{deal}/notify-buyers', [BuyerNotificationController::class, 'create'])->name('deals.notifyBuyers.create');
+        Route::post('/pipeline/{deal}/notify-buyers', [BuyerNotificationController::class, 'store'])->name('deals.notifyBuyers.store');
+
+        // Contractors attached to deals
+        Route::post('/pipeline/{deal}/contractors', [DealController::class, 'attachContractor'])->name('deals.attachContractor');
+        Route::patch('/deal-contractors/{dealContractor}', [DealController::class, 'updateContractor'])->name('deals.updateContractor');
+        Route::delete('/deal-contractors/{dealContractor}', [DealController::class, 'detachContractor'])->name('deals.detachContractor');
+
+        // Lenders attached to deals
+        Route::post('/pipeline/{deal}/lenders', [DealController::class, 'attachLender'])->name('deals.attachLender');
+        Route::patch('/deal-lenders/{dealLender}', [DealController::class, 'updateLender'])->name('deals.updateLender');
+        Route::delete('/deal-lenders/{dealLender}', [DealController::class, 'detachLender'])->name('deals.detachLender');
+
+        // Rehab Tracker line items
+        Route::post('/pipeline/{deal}/rehab-items', [DealController::class, 'storeRehabLineItem'])->name('deals.rehabItems.store');
+        Route::patch('/rehab-items/{rehabLineItem}', [DealController::class, 'updateRehabLineItem'])->name('deals.rehabItems.update');
+        Route::delete('/rehab-items/{rehabLineItem}', [DealController::class, 'destroyRehabLineItem'])->name('deals.rehabItems.destroy');
 
         // Transaction Checklist
         Route::post('/pipeline/{deal}/checklist', [DealController::class, 'storeChecklist'])->name('deals.storeChecklist');
@@ -315,6 +342,9 @@ Route::middleware(['auth', 'tenant', 'require2fa'])->group(function () {
         Route::get('/pipeline/{deal}/documents/generate', [DocumentGeneratorController::class, 'create'])->name('documents.generate');
         Route::post('/pipeline/{deal}/documents/generate', [DocumentGeneratorController::class, 'store'])->name('documents.store');
         Route::post('/documents/preview-deal/{deal}', [DocumentGeneratorController::class, 'previewWithDeal'])->name('documents.previewWithDeal');
+        Route::get('/documents/{document}/download-pdf', [DocumentGeneratorController::class, 'downloadPdf'])->name('documents.downloadPdf');
+        Route::get('/documents/{document}/edit', [DocumentGeneratorController::class, 'edit'])->name('documents.edit');
+        Route::put('/documents/{document}', [DocumentGeneratorController::class, 'update'])->name('documents.update');
         Route::get('/documents/{document}', [DocumentGeneratorController::class, 'show'])->name('documents.show');
         Route::get('/documents/{document}/print', [DocumentGeneratorController::class, 'print'])->name('documents.print');
         Route::delete('/documents/{document}', [DocumentGeneratorController::class, 'destroy'])->name('documents.destroy');
@@ -344,6 +374,24 @@ Route::middleware(['auth', 'tenant', 'require2fa'])->group(function () {
         // Buyer Transactions
         Route::post('/buyers/{buyer}/transactions', [BuyerTransactionController::class, 'store'])->name('buyers.transactions.store');
         Route::delete('/buyer-transactions/{transaction}', [BuyerTransactionController::class, 'destroy'])->name('buyer-transactions.destroy');
+    });
+
+    // ── Contractors: admin, acquisition_agent, disposition_agent ──────
+    Route::middleware('role:admin,acquisition_agent,disposition_agent')->group(function () {
+        Route::get('/contractors/export', [ContractorController::class, 'export'])->name('contractors.export');
+        Route::get('/contractors/import-template', [ContractorController::class, 'importTemplate'])->name('contractors.importTemplate');
+        Route::post('/contractors/import', [ContractorController::class, 'import'])->name('contractors.import');
+        Route::post('/contractors/bulk-action', [ContractorController::class, 'bulkAction'])->name('contractors.bulkAction');
+        Route::resource('contractors', ContractorController::class);
+    });
+
+    // ── Lenders: admin, acquisition_agent, disposition_agent ──────
+    Route::middleware('role:admin,acquisition_agent,disposition_agent')->group(function () {
+        Route::post('/lenders/{lender}/programs', [LenderController::class, 'storeProgram'])->name('lenders.programs.store');
+        Route::put('/lender-programs/{program}', [LenderController::class, 'updateProgram'])->name('lenders.programs.update');
+        Route::delete('/lender-programs/{program}', [LenderController::class, 'destroyProgram'])->name('lenders.programs.destroy');
+        Route::resource('lenders', LenderController::class);
+        Route::resource('title-companies', TitleCompanyController::class);
     });
 
     // ── Goals: all except field_scout ────────────────────
@@ -595,7 +643,3 @@ Route::middleware(['auth', 'tenant', 'require2fa'])->group(function () {
     Route::get('/help', [KnowledgeBaseController::class, 'index'])->name('help.index');
     Route::get('/help/{slug}', [KnowledgeBaseController::class, 'show'])->name('help.show');
 });
-
-
-
-

@@ -70,6 +70,10 @@
                         <div class="datagrid-content">@if($buyer->email)<a href="mailto:{{ $buyer->email }}" class="text-reset"><svg xmlns="http://www.w3.org/2000/svg" class="icon icon-inline" width="16" height="16" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><rect x="3" y="5" width="18" height="14" rx="2"/><polyline points="3 7 12 13 21 7"/></svg> {{ $buyer->email }}</a>@else - @endif</div>
                     </div>
                     <div class="datagrid-item">
+                        <div class="datagrid-title">{{ __('Address') }}</div>
+                        <div class="datagrid-content">{{ $buyer->full_address ?: '-' }}</div>
+                    </div>
+                    <div class="datagrid-item">
                         <div class="datagrid-title">{{ ($businessMode ?? 'wholesale') === 'realestate' ? __('Budget') : __('Max Purchase Price') }}</div>
                         <div class="datagrid-content">{{ Fmt::currency($buyer->max_purchase_price) }}</div>
                     </div>

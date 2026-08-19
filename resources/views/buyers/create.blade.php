@@ -56,6 +56,18 @@
                     </div>
                 </div>
             </div>
+            <div class="row mb-3">
+                <div class="col-12">
+                    <label class="form-label">{{ __('Buyer Address') }}</label>
+                    <input type="text" name="address" class="form-control @error('address') is-invalid @enderror" value="{{ old('address') }}">
+                    @error('address') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col-md-5"><label class="form-label">{{ __('City') }}</label><input type="text" name="city" class="form-control" value="{{ old('city') }}"></div>
+                <div class="col-md-3"><label class="form-label">{{ __('State') }}</label><input type="text" name="state" class="form-control" value="{{ old('state') }}"></div>
+                <div class="col-md-4"><label class="form-label">{{ __('Zip Code') }}</label><input type="text" name="zip_code" class="form-control" value="{{ old('zip_code') }}"></div>
+            </div>
             <div class="mb-3">
                 <label class="form-label">{{ __('Preferred Property Types') }}</label>
                 <div class="row">

@@ -14,7 +14,7 @@ class DispositionRoomController extends Controller
     {
         $this->authorize('view', $deal);
 
-        $deal->load(['lead.property', 'agent']);
+        $deal->load(['lead.property', 'agent', 'selectedBuyer']);
 
         $matchesQuery = DealBuyerMatch::where('deal_id', $deal->id)
             ->with('buyer')

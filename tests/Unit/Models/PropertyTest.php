@@ -32,16 +32,45 @@ class PropertyTest extends TestCase
         $this->assertEquals(110000, $property->mao);
     }
 
+    public function test_mao_computed_attribute_uses_selected_percentage(): void
+    {
+        $this->actingAsAdmin();
+        $property = $this->createProperty([
+            'after_repair_value' => 340000,
+            'repair_estimate' => 60500,
+            'mao_percentage' => 72,
+        ]);
+
+        $this->assertEquals(184300, $property->mao);
+
+        $property->update(['mao_percentage' => 75]);
+        $this->assertEquals(194500, $property->fresh()->mao);
+    }
+
     public function test_assignment_fee_computed_attribute(): void
     {
         $this->actingAsAdmin();
         $property = $this->createProperty([
-            'after_repair_value' => 200000,
-            'repair_estimate' => 30000,
-            'our_offer' => 100000,
+            'after_repair_value' => 340000,
+            'repair_estimate' => 60500,
+            'our_offer' => 175000,
         ]);
 
-        $this->assertIsNumeric($property->assignment_fee);
+        // MAO = (340000 * 0.70) - 60500 = 177500; Assignment Fee = 177500 - 175000.
+        $this->assertEquals(2500, $property->assignment_fee);
+    }
+
+    public function test_assignment_fee_uses_selected_mao_percentage(): void
+    {
+        $this->actingAsAdmin();
+        $property = $this->createProperty([
+            'after_repair_value' => 340000,
+            'repair_estimate' => 60500,
+            'our_offer' => 175000,
+            'mao_percentage' => 75,
+        ]);
+
+        $this->assertEquals(19500, $property->assignment_fee);
     }
 
     public function test_distress_markers_cast_to_array(): void

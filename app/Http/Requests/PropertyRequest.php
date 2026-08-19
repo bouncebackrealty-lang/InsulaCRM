@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Deal;
 use App\Services\BusinessModeService;
 use App\Services\CustomFieldService;
 use Illuminate\Foundation\Http\FormRequest;
@@ -24,7 +25,9 @@ class PropertyRequest extends FormRequest
             'city' => 'required|string|max:255',
             'state' => 'required|string|max:2',
             'zip_code' => 'required|string|max:10',
+            'parcel_id' => 'nullable|string|max:255',
             'property_type' => "required|in:{$propertyTypes}",
+            'deal_type' => 'nullable|string|in:' . implode(',', array_keys(Deal::dealTypes())),
             'bedrooms' => 'nullable|integer|min:0',
             'bathrooms' => 'nullable|integer|min:0',
             'square_footage' => 'nullable|integer|min:0',
@@ -49,6 +52,7 @@ class PropertyRequest extends FormRequest
             $rules += [
                 'repair_estimate' => 'nullable|numeric|min:0',
                 'after_repair_value' => 'nullable|numeric|min:0|gte:repair_estimate',
+                'mao_percentage' => 'nullable|integer|in:70,72,75',
                 'our_offer' => 'nullable|numeric|min:0',
                 'distress_markers' => 'nullable|array',
                 'distress_markers.*' => "in:{$distressMarkers}",

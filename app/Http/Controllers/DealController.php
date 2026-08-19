@@ -7,17 +7,26 @@ use App\Facades\Hooks;
 use App\Http\Requests\DealRequest;
 use App\Models\Activity;
 use App\Models\AuditLog;
+use App\Models\Buyer;
+use App\Models\Contractor;
 use App\Models\Deal;
+use App\Models\DealContractor;
 use App\Models\DealDocument;
+use App\Models\DealLender;
 use App\Models\DealOffer;
+use App\Models\LenderLoanProgram;
+use App\Models\RehabLineItem;
 use App\Models\Role;
 use App\Models\TransactionChecklist;
+use App\Models\TitleCompany;
 use App\Models\User;
 use App\Notifications\BuyerMatchFound;
 use App\Notifications\DealStageChanged as DealStageChangedNotification;
 use App\Services\BuyerScoreService;
+use App\Services\CustomFieldService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Storage;
 
 class DealController extends Controller
@@ -26,7 +35,12 @@ class DealController extends Controller
     {
         $this->authorize('viewAny', Deal::class);
 
-        $query = Deal::with(['lead.property', 'agent']);
+        $query = Deal::with([
+            'lead.property',
+            'lead.photos',
+            'agent',
+            'lenders.lender',
+        ]);
 
         if (auth()->user()->isAgent()) {
             $query->where('agent_id', auth()->id());
@@ -37,24 +51,65 @@ class DealController extends Controller
             $query->where('agent_id', $request->agent);
         }
 
+        if ($request->filled('stage')) {
+            $query->where('stage', $request->stage);
+        }
+
+        if ($request->filled('deal_type')) {
+            $query->where('deal_type', $request->deal_type);
+        }
+
+        if ($request->filled('lender')) {
+            $query->whereHas('lenders', fn ($lq) => $lq->where('lender_id', $request->lender));
+        }
+
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('title', 'like', "%{$search}%")
                   ->orWhereHas('lead', function ($lq) use ($search) {
-                      $lq->where(function ($inner) use ($search) {
+                      $fullNameSql = \DB::connection()->getDriverName() === 'sqlite'
+                          ? "first_name || ' ' || last_name"
+                          : "CONCAT(first_name, ' ', last_name)";
+                      $lq->where(function ($inner) use ($search, $fullNameSql) {
                           $inner->where('first_name', 'like', "%{$search}%")
-                                ->orWhere('last_name', 'like', "%{$search}%");
+                                ->orWhere('last_name', 'like', "%{$search}%")
+                                ->orWhereRaw("{$fullNameSql} LIKE ?", ["%{$search}%"]);
                       });
                   })
                   ->orWhereHas('lead.property', function ($pq) use ($search) {
-                      $pq->where('address', 'like', "%{$search}%");
+                      $pq->where('address', 'like', "%{$search}%")
+                         ->orWhere('city', 'like', "%{$search}%")
+                         ->orWhere('state', 'like', "%{$search}%")
+                         ->orWhere('zip_code', 'like', "%{$search}%");
                   });
             });
         }
 
-        $deals = $query->get()->groupBy('stage');
+        $deals = $query
+            ->orderByDesc('is_priority')
+            ->orderByDesc('stage_changed_at')
+            ->orderByDesc('updated_at')
+            ->get();
         $stages = Deal::stageLabels();
+        $dealTypes = Deal::dealTypes();
+
+        $isRealEstate = \App\Services\BusinessModeService::isRealEstate();
+        $midStageKeys = $isRealEstate ? ['inspection'] : ['dispositions'];
+
+        $summary = [
+            'total' => $deals->count(),
+            'under_contract' => $deals->where('stage', 'under_contract')->count(),
+            'mid_stage' => $deals->whereIn('stage', $midStageKeys)->count(),
+            'mid_stage_key' => $midStageKeys[0],
+            'mid_stage_label' => $isRealEstate ? __('Inspection') : __('Dispositions'),
+            'closing' => $deals->where('stage', 'closing')->count(),
+            'closed' => $deals->where('stage', 'closed_won')->count(),
+            'under_contract_value' => $deals->where('stage', 'under_contract')->sum('contract_price'),
+            'mid_stage_value' => $deals->whereIn('stage', $midStageKeys)->sum('contract_price'),
+            'closing_value' => $deals->where('stage', 'closing')->sum('contract_price'),
+            'closed_value' => $deals->where('stage', 'closed_won')->sum('contract_price'),
+        ];
 
         // Agents for filter dropdown (admin only)
         $agents = collect();
@@ -65,7 +120,24 @@ class DealController extends Controller
                 ->get(['id', 'name']);
         }
 
-        return view('deals.pipeline', compact('deals', 'stages', 'agents'));
+        $lenders = \App\Models\Lender::orderBy('name')->get(['id', 'name', 'company']);
+        $viewMode = $request->input('view') === 'list' ? 'list' : 'card';
+
+        return view('deals.pipeline', compact('deals', 'stages', 'dealTypes', 'lenders', 'agents', 'summary', 'viewMode'));
+    }
+
+    public function togglePriority(Deal $deal)
+    {
+        $this->authorize('update', $deal);
+
+        $deal->update([
+            'is_priority' => ! $deal->is_priority,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'is_priority' => $deal->fresh()->is_priority,
+        ]);
     }
 
     public function updateStage(Request $request, Deal $deal)
@@ -82,9 +154,14 @@ class DealController extends Controller
             'stage_changed_at' => now(),
         ];
 
-        // Auto-calculate due_diligence_end_date when moving to under_contract
-        if ($request->stage === 'under_contract' && $deal->contract_date && $deal->inspection_period_days > 0) {
-            $updateData['due_diligence_end_date'] = $deal->contract_date->copy()->addDays($deal->inspection_period_days);
+
+        if ($request->stage === 'under_contract' && ! \App\Services\BusinessModeService::isRealEstate()) {
+            $contractDate = $deal->contract_date ?: now()->startOfDay();
+            $inspectionDays = $deal->inspection_period_days ?: 10;
+
+            $updateData['contract_date'] = $contractDate;
+            $updateData['inspection_period_days'] = $inspectionDays;
+            $updateData['due_diligence_end_date'] = $this->addBusinessDays($contractDate, $inspectionDays);
         }
 
         $deal->update($updateData);
@@ -177,7 +254,19 @@ class DealController extends Controller
     public function show(Deal $deal)
     {
         $this->authorize('view', $deal);
-        $deal->load(['lead.property', 'agent', 'documents', 'buyerMatches.buyer', 'activities.agent']);
+        $deal->load([
+            'lead.property',
+            'agent',
+            'documents',
+            'selectedBuyer',
+            'buyerMatches.buyer',
+            'activities.agent',
+            'contractors.contractor',
+            'lenders.lender',
+            'lenders.loanProgram',
+            'titleCompany',
+            'rehabLineItems.contractor',
+        ]);
 
         if (\App\Services\BusinessModeService::isRealEstate()) {
             $deal->load(['offers', 'checklistItems']);
@@ -187,19 +276,80 @@ class DealController extends Controller
             return response()->json($deal);
         }
 
-        return view('deals.show', compact('deal'));
+        $attachedContractorIds = $deal->contractors->pluck('contractor_id')->all();
+        $availableContractors = \App\Models\Contractor::whereNotIn('id', $attachedContractorIds)
+            ->orderBy('name')
+            ->get();
+        $attachedProgramIds = $deal->lenders->pluck('lender_loan_program_id')->all();
+        $availableLoanPrograms = LenderLoanProgram::with('lender')
+            ->whereNotIn('id', $attachedProgramIds)
+            ->orderBy('program_name')
+            ->get()
+            ->sortBy(fn ($program) => ($program->lender->name ?? '') . ' ' . $program->program_name);
+        $rehabContractors = Contractor::orderBy('name')->get();
+        $titleCompanies = TitleCompany::orderBy('name')->get();
+        $buyers = Buyer::query()
+            ->orderBy('company')
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get(['id', 'first_name', 'last_name', 'company', 'phone', 'email']);
+
+        return view('deals.show', compact('deal', 'availableContractors', 'availableLoanPrograms', 'rehabContractors', 'titleCompanies', 'buyers'));
+    }
+
+    public function selectBuyer(Request $request, Deal $deal)
+    {
+        $this->authorize('update', $deal);
+
+        $validated = $request->validate([
+            'buyer_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('buyers', 'id')->where('tenant_id', auth()->user()->tenant_id),
+            ],
+        ]);
+
+        $previousBuyerId = $deal->selected_buyer_id;
+        $selectedBuyerId = $validated['buyer_id'] ?? null;
+
+        $deal->update(['selected_buyer_id' => $selectedBuyerId]);
+
+        AuditLog::log(
+            $selectedBuyerId ? 'deal.buyer_selected' : 'deal.buyer_cleared',
+            $deal,
+            ['selected_buyer_id' => $previousBuyerId],
+            ['selected_buyer_id' => $selectedBuyerId],
+        );
+
+        return redirect()->back()->with(
+            'success',
+            $selectedBuyerId
+                ? __('Buyer selected for this deal and its buyer-specific documents.')
+                : __('Buyer selection cleared for this deal.'),
+        );
     }
 
     public function update(DealRequest $request, Deal $deal)
     {
         $this->authorize('update', $deal);
 
-        $deal->update($request->validated());
+        $data = $request->validated();
+
+        if (array_key_exists('title_company_id', $data) && $data['title_company_id']) {
+            abort_unless(TitleCompany::find($data['title_company_id']), 422);
+        }
+
+        $effectiveDealType = $data['deal_type'] ?? $deal->deal_type;
+        if ($effectiveDealType !== 'wholesale') {
+            $data['assignment_fee'] = null;
+        }
+
+        $deal->update($data);
 
         // Recalculate due_diligence_end_date if relevant fields changed
         if ($deal->contract_date && $deal->inspection_period_days > 0 && $deal->stage === 'under_contract') {
             $deal->update([
-                'due_diligence_end_date' => $deal->contract_date->copy()->addDays($deal->inspection_period_days),
+                'due_diligence_end_date' => $this->addBusinessDays($deal->contract_date, $deal->inspection_period_days),
             ]);
         }
 
@@ -238,16 +388,23 @@ class DealController extends Controller
         return Storage::disk('local')->download($document->path, $document->original_name);
     }
 
-    public function notifyBuyer(Deal $deal, \App\Models\DealBuyerMatch $match)
+
+    public function destroyDocument(Deal $deal, DealDocument $document)
     {
-        $this->authorize('notifyBuyer', $deal);
+        $this->authorize('uploadDocument', $deal);
 
-        $match->update(['notified_at' => now()]);
+        abort_unless(
+            $document->deal_id === $deal->id && $document->tenant_id === $deal->tenant_id,
+            404
+        );
 
-        event(new \App\Events\BuyerNotified($match->buyer, $deal));
-        Hooks::doAction('buyer.notified', $match->buyer, $deal);
+        Storage::disk('local')->delete($document->path);
+        $document->delete();
 
-        return redirect()->back()->with('success', 'Buyer notified successfully.');
+        AuditLog::log('deal.document_deleted', $deal, null, ['name' => $document->original_name]);
+
+        return redirect()->route('deals.show', $deal)
+            ->with('success', 'Document deleted successfully.');
     }
 
     public function export(Request $request)
@@ -470,6 +627,189 @@ class DealController extends Controller
 
         $offer->delete();
         return response()->json(['success' => true]);
+    }
+
+    // ── Contractors ───────────────────────────────────────
+
+    public function attachContractor(Request $request, Deal $deal)
+    {
+        $this->authorize('update', $deal);
+
+        $validated = $request->validate([
+            'contractor_id' => [
+                'required',
+                Rule::exists('contractors', 'id')->where('tenant_id', auth()->user()->tenant_id),
+                Rule::unique('deal_contractors', 'contractor_id')->where('deal_id', $deal->id),
+            ],
+            'quoted_amount' => 'nullable|numeric|min:0',
+            'accepted_amount' => 'nullable|numeric|min:0',
+            'notes' => 'nullable|string',
+        ]);
+
+        DealContractor::create([
+            'deal_id' => $deal->id,
+            'contractor_id' => $validated['contractor_id'],
+            'quoted_amount' => $validated['quoted_amount'] ?? null,
+            'accepted_amount' => $validated['accepted_amount'] ?? null,
+            'notes' => $validated['notes'] ?? null,
+        ]);
+
+        return redirect()->back()->with('success', __('Contractor attached to deal.'));
+    }
+
+    public function updateContractor(Request $request, DealContractor $dealContractor)
+    {
+        $deal = Deal::findOrFail($dealContractor->deal_id);
+        $this->authorize('update', $deal);
+
+        $validated = $request->validate([
+            'quoted_amount' => 'nullable|numeric|min:0',
+            'accepted_amount' => 'nullable|numeric|min:0',
+            'notes' => 'nullable|string',
+        ]);
+
+        $dealContractor->update($validated);
+
+        return redirect()->back()->with('success', __('Contractor bid updated.'));
+    }
+
+    public function detachContractor(DealContractor $dealContractor)
+    {
+        $deal = Deal::findOrFail($dealContractor->deal_id);
+        $this->authorize('update', $deal);
+
+        $dealContractor->delete();
+
+        return redirect()->back()->with('success', __('Contractor removed from deal.'));
+    }
+
+    // ── Lenders ───────────────────────────────────────
+
+    public function attachLender(Request $request, Deal $deal)
+    {
+        $this->authorize('update', $deal);
+
+        $validated = $request->validate([
+            'lender_loan_program_id' => [
+                'required',
+                Rule::exists('lender_loan_programs', 'id')->where('tenant_id', auth()->user()->tenant_id),
+                Rule::unique('deal_lenders', 'lender_loan_program_id')->where('deal_id', $deal->id),
+            ],
+            'status' => ['required', Rule::in(array_keys(DealLender::STATUSES))],
+            'notes' => 'nullable|string',
+        ]);
+
+        $program = LenderLoanProgram::with('lender')->findOrFail($validated['lender_loan_program_id']);
+
+        DealLender::create([
+            'deal_id' => $deal->id,
+            'lender_id' => $program->lender_id,
+            'lender_loan_program_id' => $program->id,
+            'status' => $validated['status'],
+            'notes' => $validated['notes'] ?? null,
+        ]);
+
+        return redirect()->back()->with('success', __('Lender attached to deal.'));
+    }
+
+    public function updateLender(Request $request, DealLender $dealLender)
+    {
+        $deal = Deal::findOrFail($dealLender->deal_id);
+        $this->authorize('update', $deal);
+
+        $validated = $request->validate([
+            'status' => ['required', Rule::in(array_keys(DealLender::STATUSES))],
+            'notes' => 'nullable|string',
+        ]);
+
+        $dealLender->update($validated);
+
+        return redirect()->back()->with('success', __('Lender funding updated.'));
+    }
+
+    public function detachLender(DealLender $dealLender)
+    {
+        $deal = Deal::findOrFail($dealLender->deal_id);
+        $this->authorize('update', $deal);
+
+        $dealLender->delete();
+
+        return redirect()->back()->with('success', __('Lender removed from deal.'));
+    }
+
+    // ── Rehab Tracker ──────────────────────────────────────
+
+    public function storeRehabLineItem(Request $request, Deal $deal)
+    {
+        $this->authorize('update', $deal);
+
+        RehabLineItem::create([
+            'tenant_id' => auth()->user()->tenant_id,
+            'deal_id' => $deal->id,
+            ...$this->validateRehabLineItem($request),
+        ]);
+
+        return redirect()->back()->with('success', __('Rehab line item added.'));
+    }
+
+    public function updateRehabLineItem(Request $request, RehabLineItem $rehabLineItem)
+    {
+        $deal = Deal::findOrFail($rehabLineItem->deal_id);
+        $this->authorize('update', $deal);
+
+        $rehabLineItem->update($this->validateRehabLineItem($request));
+
+        return redirect()->back()->with('success', __('Rehab line item updated.'));
+    }
+
+    public function destroyRehabLineItem(RehabLineItem $rehabLineItem)
+    {
+        $deal = Deal::findOrFail($rehabLineItem->deal_id);
+        $this->authorize('update', $deal);
+
+        $rehabLineItem->delete();
+
+        return redirect()->back()->with('success', __('Rehab line item removed.'));
+    }
+
+    private function addBusinessDays($startDate, int $days)
+    {
+        $date = $startDate->copy()->startOfDay();
+        $added = 0;
+
+        while ($added < $days) {
+            $date->addDay();
+
+            if (! $date->isWeekend()) {
+                $added++;
+            }
+        }
+
+        return $date;
+    }
+
+    private function validateRehabLineItem(Request $request): array
+    {
+        $tenant = auth()->user()->tenant()->first();
+
+        $validated = $request->validate([
+            'line_item' => 'required|string|max:255',
+            'category' => ['required', Rule::in(CustomFieldService::getValidSlugs('rehab_category', $tenant))],
+            'budgeted_cost' => 'required|numeric|min:0',
+            'estimated_duration_days' => 'nullable|integer|min:0',
+            'contractor_id' => [
+                'nullable',
+                Rule::exists('contractors', 'id')->where('tenant_id', auth()->user()->tenant_id),
+            ],
+            'status' => ['required', Rule::in(array_keys(RehabLineItem::STATUSES))],
+            'amount_paid' => 'nullable|numeric|min:0',
+        ]);
+
+        $validated['contractor_id'] = $validated['contractor_id'] ?? null;
+        $validated['estimated_duration_days'] = $validated['estimated_duration_days'] ?? null;
+        $validated['amount_paid'] = $validated['amount_paid'] ?? 0;
+
+        return $validated;
     }
 
 }

@@ -280,15 +280,24 @@ class LeadController extends Controller
             'agent_id' => $lead->agent_id ?: auth()->id(),
             'title' => $property?->full_address ?: $lead->full_name . ' Deal',
             'stage' => BusinessModeService::getDefaultStage($tenant),
+            'inspection_period_days' => $isWholesale ? 10 : null,
             'notes' => $property?->notes,
         ];
 
         if ($property) {
+            $data['deal_type'] = $property->deal_type;
+
             if ($isWholesale) {
                 $data['contract_price'] = $property->our_offer ?: $property->asking_price ?: $property->estimated_value;
 
-                if ($property->our_offer && $property->mao !== null) {
+
+                if ($property->deal_type === 'wholesale' && $property->our_offer && $property->mao !== null) {
                     $data['assignment_fee'] = max((float) $property->mao - (float) $property->our_offer, 0);
+                }
+
+
+                if ($data['contract_price'] !== null) {
+                    $data['earnest_money'] = round((float) $data['contract_price'] * 0.01, 2);
                 }
             }
 
@@ -390,7 +399,7 @@ class LeadController extends Controller
         $this->authorize('update', $lead);
 
         $request->validate([
-            'photos' => 'required|array|max:10',
+            'photos' => 'required|array',
             'photos.*' => 'image|mimes:jpg,jpeg,png,gif,webp|max:10240',
             'captions' => 'nullable|array',
             'captions.*' => 'nullable|string|max:255',
@@ -433,7 +442,7 @@ class LeadController extends Controller
         }
         $photo->delete();
 
-        return redirect()->route('leads.show', $lead)
+        return redirect()->to(route('leads.show', $lead) . '#photos-section')
             ->with('success', 'Photo deleted.');
     }
 

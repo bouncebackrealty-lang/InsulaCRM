@@ -9,6 +9,10 @@
 @endsection
 
 @section('content')
+@php
+    $isWholesaleDeal = ($businessMode ?? 'wholesale') === 'wholesale' && $deal->deal_type === 'wholesale';
+    $directEntryValue = static fn ($value) => in_array((float) $value, [0.0, 0.01], true) ? '' : $value;
+@endphp
 <div class="row">
     <div class="col-md-8">
         <!-- AI Briefing (auto-loads) -->
@@ -74,6 +78,12 @@
                         {{ __('Investor Packet') }}
                     </a>
                     @endif
+                    @can('notifyBuyer', $deal)
+                    <a href="{{ route('deals.notifyBuyers.create', $deal) }}" class="btn btn-outline-success btn-sm" title="{{ __('Notify Buyers') }}">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10 14l11 -11"/><path d="M21 3l-6.5 18l-4.5 -7l-7 -4.5z"/><path d="M10 14l5 -5"/></svg>
+                        {{ __('Notify Buyers') }}
+                    </a>
+                    @endcan
                     <a href="{{ route('pipeline') }}" class="btn btn-outline-secondary btn-sm">{{ ($businessMode ?? 'wholesale') === 'realestate' ? __('Back to Transactions') : __('Back to Pipeline') }}</a>
                 </div>
             </div>
@@ -101,14 +111,54 @@
                         </div>
                     </div>
                     <div class="datagrid-item">
+                        <div class="datagrid-title">{{ __('Title Company / Closing Attorney') }}</div>
+                        <div class="datagrid-content">
+                            @if($deal->titleCompany)
+                                <div>{{ $deal->titleCompany->name }}</div>
+                                @if($deal->titleCompany->closing_attorney)
+                                    <div class="text-secondary small">{{ $deal->titleCompany->closing_attorney }}</div>
+                                @endif
+                            @else
+                                <span class="text-secondary">{{ __('Not selected') }}</span>
+                            @endif
+                        </div>
+                    </div>
+                    <div class="datagrid-item">
+                        <div class="datagrid-title">{{ __('Title Status') }}</div>
+                        <div class="datagrid-content">
+                            @if($deal->title_status)
+                                <span class="badge bg-blue-lt">{{ $deal->title_status_label }}</span>
+                            @else
+                                <span class="text-secondary">{{ __('Not Set') }}</span>
+                            @endif
+                        </div>
+                    </div>
+                    <div class="datagrid-item">
                         <div class="datagrid-title">{{ __('Contract Price') }}</div>
                         <div class="datagrid-content">{{ Fmt::currency($deal->contract_price) }}</div>
                     </div>
+                    <div class="datagrid-item">
+                        <div class="datagrid-title">{{ __('Buyer Notify') }}</div>
+                        <div class="datagrid-content">
+                            @if($deal->buyers_notified_at)
+                                <span class="badge bg-{{ $deal->buyer_notification_status === 'sent' ? 'green' : 'red' }}-lt">
+                                    {{ $deal->buyer_notification_status === 'sent' ? __('Sent') : __('Failed') }}
+                                </span>
+                                <span class="text-secondary small ms-1">{{ $deal->buyers_notified_at->diffForHumans() }}{{ $deal->buyers_notified_count ? ' (' . $deal->buyers_notified_count . ')' : '' }}</span>
+                            @elseif($deal->buyer_notification_status === 'failed')
+                                <span class="badge bg-red-lt">{{ __('Failed') }}</span>
+                            @else
+                                <span class="text-secondary">{{ __('Not sent') }}</span>
+                            @endif
+                        </div>
+                    </div>
                     @if($businessMode === 'wholesale')
+                    @if($isWholesaleDeal)
                     <div class="datagrid-item">
                         <div class="datagrid-title">{{ __('Assignment Fee') }}</div>
                         <div class="datagrid-content">{{ Fmt::currency($deal->assignment_fee) }}</div>
                     </div>
+                    @endif
                     <div class="datagrid-item">
                         <div class="datagrid-title">{{ __('Earnest Money') }}</div>
                         <div class="datagrid-content">{{ Fmt::currency($deal->earnest_money) }}</div>
@@ -168,6 +218,61 @@
             </div>
         </div>
 
+        <!-- Buyer selected as the contract party -->
+        <div class="card mb-3" id="deal-buyer-selection">
+            <div class="card-header">
+                <h3 class="card-title">{{ __('Buyer for This Deal') }}</h3>
+                @if($deal->selectedBuyer)
+                    <div class="card-actions">
+                        <span class="badge bg-green-lt">{{ __('Used in buyer-specific documents') }}</span>
+                    </div>
+                @endif
+            </div>
+            <div class="card-body">
+                <p class="text-secondary small mb-3">
+                    {{ __('Select the one official buyer attached to this deal. This controls buyer fields in generated documents and is separate from Notify Buyers.') }}
+                </p>
+                @can('update', $deal)
+                <form method="POST" action="{{ route('deals.selectBuyer', $deal) }}" class="row g-2 align-items-end">
+                    @csrf
+                    @method('PATCH')
+                    <div class="col-md-9">
+                        <label class="form-label" for="selected-buyer-id">{{ __('Buyer from CRM') }}</label>
+                        <select name="buyer_id" id="selected-buyer-id" class="form-select">
+                            <option value="">{{ __('No buyer selected') }}</option>
+                            @foreach($buyers as $buyer)
+                                <option value="{{ $buyer->id }}" {{ (int) $deal->selected_buyer_id === (int) $buyer->id ? 'selected' : '' }}>
+                                    {{ $buyer->company ? $buyer->company.' - ' : '' }}{{ $buyer->full_name }}{{ $buyer->email ? ' ('.$buyer->email.')' : '' }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <button type="submit" class="btn btn-primary w-100">{{ __('Save Buyer') }}</button>
+                    </div>
+                </form>
+                @endcan
+
+                @if($deal->selectedBuyer)
+                    <div class="mt-3">
+                        <strong>{{ $deal->selectedBuyer->company ?: $deal->selectedBuyer->full_name }}</strong>
+                        @if($deal->selectedBuyer->company)
+                            <span class="text-secondary">&middot; {{ $deal->selectedBuyer->full_name }}</span>
+                        @endif
+                        @if($deal->selectedBuyer->phone || $deal->selectedBuyer->email)
+                            <div class="text-secondary small">
+                                {{ $deal->selectedBuyer->phone }}{{ $deal->selectedBuyer->phone && $deal->selectedBuyer->email ? ' | ' : '' }}{{ $deal->selectedBuyer->email }}
+                            </div>
+                        @endif
+                    </div>
+                @else
+                    <div class="alert alert-warning mt-3 mb-0 py-2">
+                        {{ __('No official buyer is selected. Buyer-specific document fields will remain blank until one is selected.') }}
+                    </div>
+                @endif
+            </div>
+        </div>
+
         <!-- Buyer Matches -->
         @if($deal->buyerMatches->count())
         <div class="card mb-3">
@@ -193,6 +298,9 @@
                                     {{ $match->buyer->company ?: $match->buyer->full_name }}
                                 </a>
                                 <div class="text-secondary small">{{ $match->buyer->full_name }}</div>
+                                @if((int) $deal->selected_buyer_id === (int) $match->buyer_id)
+                                    <span class="badge bg-green-lt mt-1">{{ __('Buyer for this deal') }}</span>
+                                @endif
                             </td>
                             <td>
                                 <span class="badge {{ $match->match_score >= 70 ? 'bg-green-lt' : ($match->match_score >= 40 ? 'bg-yellow-lt' : 'bg-red-lt') }}">
@@ -207,13 +315,19 @@
                             </td>
                             <td>
                                 <a href="{{ route('buyers.show', $match->buyer) }}" class="btn btn-sm btn-outline-primary">{{ __('View') }}</a>
-                                @if(!$match->notified_at)
-                                <form method="POST" action="{{ route('deals.notifyBuyer', [$deal, $match]) }}" class="d-inline">
-                                    @csrf
-                                    <button type="submit" class="btn btn-sm btn-outline-success">{{ __('Notify') }}</button>
-                                </form>
-                                @else
-                                <span class="badge bg-green-lt">{{ __('Notified') }} {{ $match->notified_at->diffForHumans() }}</span>
+                                <a href="{{ route('deals.notifyBuyers.create', ['deal' => $deal, 'buyer' => $match->buyer_id]) }}" class="btn btn-sm btn-outline-success">{{ __('Notify') }}</a>
+                                @can('update', $deal)
+                                    @if((int) $deal->selected_buyer_id !== (int) $match->buyer_id)
+                                    <form method="POST" action="{{ route('deals.selectBuyer', $deal) }}" class="d-inline">
+                                        @csrf
+                                        @method('PATCH')
+                                        <input type="hidden" name="buyer_id" value="{{ $match->buyer_id }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary">{{ __('Use for Documents') }}</button>
+                                    </form>
+                                    @endif
+                                @endcan
+                                @if($match->notified_at)
+                                    <span class="badge bg-green-lt">{{ __('Last sent') }} {{ $match->notified_at->diffForHumans() }}</span>
                                 @endif
                             </td>
                         </tr>
@@ -223,6 +337,418 @@
             </div>
         </div>
         @endif
+
+        <!-- Contractors -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h3 class="card-title">{{ __('Contractors') }}</h3>
+                @if($deal->contractors->count())
+                <div class="card-actions">
+                    <span class="badge bg-blue-lt">{{ $deal->contractors->count() }}</span>
+                </div>
+                @endif
+            </div>
+            @if($deal->contractors->count())
+            <div class="table-responsive">
+                <table class="table table-vcenter card-table">
+                    <thead>
+                        <tr>
+                            <th>{{ __('Contractor') }}</th>
+                            <th>{{ __('Specialty') }}</th>
+                            <th style="min-width: 320px;">{{ __('Quoted / Accepted') }}</th>
+                            <th class="w-1"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($deal->contractors as $dc)
+                        <tr>
+                            <td>
+                                @if($dc->contractor)
+                                <a href="{{ route('contractors.show', $dc->contractor) }}" class="fw-bold">{{ $dc->contractor->name }}</a>
+                                @if($dc->contractor->phone)<div class="text-secondary small">{{ $dc->contractor->phone }}</div>@endif
+                                @else
+                                <span class="text-secondary">{{ __('Removed contractor') }}</span>
+                                @endif
+                            </td>
+                            <td>
+                                @forelse($dc->contractor->specialty ?? [] as $trade)
+                                    <span class="badge bg-blue-lt me-1">{{ __(\App\Models\Contractor::TRADE_CATEGORIES[$trade] ?? $trade) }}</span>
+                                @empty
+                                    <span class="text-secondary">-</span>
+                                @endforelse
+                            </td>
+                            <td>
+                                <form method="POST" action="{{ route('deals.updateContractor', $dc) }}" class="d-flex gap-2 align-items-center">
+                                    @csrf
+                                    @method('PATCH')
+                                    <div class="input-group input-group-sm" style="max-width: 140px;">
+                                        <span class="input-group-text">$</span>
+                                        <input type="number" name="quoted_amount" class="form-control" value="{{ $dc->quoted_amount }}" step="0.01" min="0" placeholder="{{ __('Quoted') }}" aria-label="{{ __('Quoted') }}">
+                                    </div>
+                                    <div class="input-group input-group-sm" style="max-width: 140px;">
+                                        <span class="input-group-text">$</span>
+                                        <input type="number" name="accepted_amount" class="form-control" value="{{ $dc->accepted_amount }}" step="0.01" min="0" placeholder="{{ __('Accepted') }}" aria-label="{{ __('Accepted') }}">
+                                    </div>
+                                    <button type="submit" class="btn btn-sm btn-outline-primary">{{ __('Save') }}</button>
+                                </form>
+                            </td>
+                            <td>
+                                <form method="POST" action="{{ route('deals.detachContractor', $dc) }}" onsubmit="return confirm('{{ __('Remove this contractor from the deal?') }}')">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">{{ __('Remove') }}</button>
+                                </form>
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+            @endif
+            <div class="card-body border-top">
+                @if($availableContractors->count())
+                <form method="POST" action="{{ route('deals.attachContractor', $deal) }}" class="row g-2 align-items-end">
+                    @csrf
+                    <div class="col-md-4">
+                        <label class="form-label">{{ __('Attach Contractor') }}</label>
+                        <select name="contractor_id" class="form-select @error('contractor_id') is-invalid @enderror" required>
+                            <option value="">{{ __('Select contractor...') }}</option>
+                            @foreach($availableContractors as $contractor)
+                            <option value="{{ $contractor->id }}" {{ old('contractor_id') == $contractor->id ? 'selected' : '' }}>{{ $contractor->name }}</option>
+                            @endforeach
+                        </select>
+                        @error('contractor_id') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">{{ __('Quoted') }}</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" name="quoted_amount" class="form-control" value="{{ old('quoted_amount') }}" step="0.01" min="0">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">{{ __('Accepted') }}</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" name="accepted_amount" class="form-control" value="{{ old('accepted_amount') }}" step="0.01" min="0">
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary w-100">{{ __('Attach') }}</button>
+                    </div>
+                </form>
+                @else
+                <p class="text-secondary mb-0">
+                    @if($deal->contractors->count())
+                        {{ __('All contractors are already attached to this deal.') }}
+                    @else
+                        {{ __('No contractors available.') }} <a href="{{ route('contractors.create') }}">{{ __('Add a contractor') }}</a> {{ __('first.') }}
+                    @endif
+                </p>
+                @endif
+            </div>
+        </div>
+
+        <!-- Lenders -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h3 class="card-title">{{ __('Lenders') }}</h3>
+                @if($deal->lenders->count())
+                <div class="card-actions">
+                    <span class="badge bg-blue-lt">{{ $deal->lenders->count() }}</span>
+                </div>
+                @endif
+            </div>
+            @if($deal->lenders->count())
+            <div class="table-responsive">
+                <table class="table table-vcenter card-table">
+                    <thead>
+                        <tr>
+                            <th>{{ __('Lender') }}</th>
+                            <th>{{ __('Loan Program') }}</th>
+                            <th>{{ __('Terms') }}</th>
+                            <th style="min-width: 300px;">{{ __('Funding Status') }}</th>
+                            <th class="w-1"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($deal->lenders as $dl)
+                        <tr>
+                            <td>
+                                @if($dl->lender)
+                                <a href="{{ route('lenders.show', $dl->lender) }}" class="fw-bold">{{ $dl->lender->name }}</a>
+                                @if($dl->lender->company)<div class="text-secondary small">{{ $dl->lender->company }}</div>@endif
+                                @if($dl->lender->phone)<div class="text-secondary small">{{ $dl->lender->phone }}</div>@endif
+                                @else
+                                <span class="text-secondary">{{ __('Removed lender') }}</span>
+                                @endif
+                            </td>
+                            <td>{{ $dl->loanProgram->program_name ?? '-' }}</td>
+                            <td class="text-secondary small">
+                                @if($dl->loanProgram)
+                                    @if($dl->loanProgram->interest_rate !== null){{ __('Rate:') }} {{ $dl->loanProgram->interest_rate }}%<br>@endif
+                                    @if($dl->loanProgram->points !== null){{ __('Points:') }} {{ $dl->loanProgram->points }}<br>@endif
+                                    @if($dl->loanProgram->max_ltc !== null){{ __('LTC:') }} {{ $dl->loanProgram->max_ltc }}%<br>@endif
+                                    @if($dl->loanProgram->max_ltv !== null){{ __('LTV:') }} {{ $dl->loanProgram->max_ltv }}%<br>@endif
+                                    @if($dl->loanProgram->term_length){{ __('Term:') }} {{ $dl->loanProgram->term_length }}<br>@endif
+                                    @if($dl->loanProgram->purchase_closing_cost_percent !== null){{ __('Purchase Closing Cost:') }} {{ $dl->loanProgram->purchase_closing_cost_percent }}%<br>@endif
+                                    {{ __('Builder Risk:') }} {{ $dl->loanProgram->builders_risk_insurance ? __('Yes') : __('No') }}
+                                    @if($dl->loanProgram->notes)<br>{{ __('Program Notes:') }} {{ $dl->loanProgram->notes }}@endif
+                                @else
+                                    -
+                                @endif
+                            </td>
+                            <td>
+                                <form method="POST" action="{{ route('deals.updateLender', $dl) }}" class="d-flex gap-2 align-items-center">
+                                    @csrf
+                                    @method('PATCH')
+                                    <select name="status" class="form-select form-select-sm" style="max-width: 190px;">
+                                        @foreach(\App\Models\DealLender::STATUSES as $val => $label)
+                                        <option value="{{ $val }}" {{ $dl->status === $val ? 'selected' : '' }}>{{ __($label) }}</option>
+                                        @endforeach
+                                    </select>
+                                    <input type="text" name="notes" class="form-control form-control-sm" value="{{ $dl->notes }}" placeholder="{{ __('Notes') }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-primary">{{ __('Save') }}</button>
+                                </form>
+                            </td>
+                            <td>
+                                <form method="POST" action="{{ route('deals.detachLender', $dl) }}" onsubmit="return confirm('{{ __('Remove this lender from the deal?') }}')">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">{{ __('Remove') }}</button>
+                                </form>
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+            @endif
+            <div class="card-body border-top">
+                @if($availableLoanPrograms->count())
+                <form method="POST" action="{{ route('deals.attachLender', $deal) }}" class="row g-2 align-items-end">
+                    @csrf
+                    <div class="col-md-5">
+                        <label class="form-label">{{ __('Attach Lender Program') }}</label>
+                        <select name="lender_loan_program_id" class="form-select @error('lender_loan_program_id') is-invalid @enderror" required>
+                            <option value="">{{ __('Select lender program...') }}</option>
+                            @foreach($availableLoanPrograms as $program)
+                            <option value="{{ $program->id }}" {{ old('lender_loan_program_id') == $program->id ? 'selected' : '' }}>
+                                {{ $program->lender->name ?? __('Lender') }} - {{ $program->program_name }}
+                            </option>
+                            @endforeach
+                        </select>
+                        @error('lender_loan_program_id') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">{{ __('Status') }}</label>
+                        <select name="status" class="form-select">
+                            @foreach(\App\Models\DealLender::STATUSES as $val => $label)
+                            <option value="{{ $val }}" {{ old('status', 'inquired') === $val ? 'selected' : '' }}>{{ __($label) }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">{{ __('Notes') }}</label>
+                        <input type="text" name="notes" class="form-control" value="{{ old('notes') }}">
+                    </div>
+                    <div class="col-md-1">
+                        <button type="submit" class="btn btn-primary w-100">{{ __('Attach') }}</button>
+                    </div>
+                </form>
+                @else
+                <p class="text-secondary mb-0">
+                    @if($deal->lenders->count())
+                        {{ __('All lender programs are already attached to this deal.') }}
+                    @else
+                        {{ __('No lender programs available.') }} <a href="{{ route('lenders.create') }}">{{ __('Add a lender') }}</a> {{ __('first.') }}
+                    @endif
+                </p>
+                @endif
+            </div>
+        </div>
+
+        <!-- Rehab Tracker -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h3 class="card-title">{{ __('Rehab Tracker') }}</h3>
+                @if($deal->rehabLineItems->count())
+                <div class="card-actions">
+                    <span class="badge bg-blue-lt">{{ $deal->rehabLineItems->count() }}</span>
+                </div>
+                @endif
+            </div>
+            @php
+                $rehabBudgetTotal = $deal->rehabLineItems->sum(fn ($item) => (float) $item->budgeted_cost);
+                $rehabPaidTotal = $deal->rehabLineItems->sum(fn ($item) => (float) $item->amount_paid);
+                $rehabRemainingTotal = $rehabBudgetTotal - $rehabPaidTotal;
+                $rehabCategories = \App\Services\CustomFieldService::getOptions('rehab_category');
+                $rehabDirectEntryValue = static fn ($value) => in_array((float) $value, [0.0, 0.01], true) ? '' : $value;
+            @endphp
+            @if($deal->rehabLineItems->count())
+            <div class="card-body border-bottom">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <div class="text-secondary small">{{ __('Total Budgeted') }}</div>
+                        <div class="h3 mb-0">{{ Fmt::currency($rehabBudgetTotal) }}</div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-secondary small">{{ __('Total Paid') }}</div>
+                        <div class="h3 mb-0">{{ Fmt::currency($rehabPaidTotal) }}</div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-secondary small">{{ __('Remaining Balance') }}</div>
+                        <div class="h3 mb-0">{{ Fmt::currency($rehabRemainingTotal) }}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-vcenter card-table">
+                    <thead>
+                        <tr>
+                            <th>{{ __('Category') }}</th>
+                            <th>{{ __('Line Item') }}</th>
+                            <th>{{ __('Budget') }}</th>
+                            <th>{{ __('Duration') }}</th>
+                            <th>{{ __('Contractor Assigned') }}</th>
+                            <th>{{ __('Status') }}</th>
+                            <th>{{ __('Amount') }}</th>
+                            <th>{{ __('Remaining') }}</th>
+                            <th class="w-1"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($deal->rehabLineItems as $item)
+                        <tr>
+                            <td style="min-width: 190px;">
+                                <select form="rehab-update-{{ $item->id }}" name="category" class="form-select form-select-sm" required>
+                                    @foreach($rehabCategories as $value => $label)
+                                    <option value="{{ $value }}" {{ $item->category === $value ? 'selected' : '' }}>{{ __($label) }}</option>
+                                    @endforeach
+                                </select>
+                            </td>
+                            <td>
+                                <input form="rehab-update-{{ $item->id }}" type="text" name="line_item" class="form-control form-control-sm" value="{{ $item->line_item }}" required>
+                            </td>
+                            <td style="min-width: 140px;">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text">$</span>
+                                    <input form="rehab-update-{{ $item->id }}" type="number" name="budgeted_cost" class="form-control" value="{{ $rehabDirectEntryValue($item->budgeted_cost) }}" step="0.01" min="0" required>
+                                </div>
+                            </td>
+                            <td style="min-width: 110px;">
+                                <input form="rehab-update-{{ $item->id }}" type="number" name="estimated_duration_days" class="form-control form-control-sm" value="{{ $item->estimated_duration_days }}" min="0" placeholder="{{ __('Days') }}">
+                            </td>
+                            <td style="min-width: 180px;">
+                                <select form="rehab-update-{{ $item->id }}" name="contractor_id" class="form-select form-select-sm">
+                                    <option value="">{{ __('Unassigned') }}</option>
+                                    @foreach($rehabContractors as $contractor)
+                                    <option value="{{ $contractor->id }}" {{ (int) $item->contractor_id === $contractor->id ? 'selected' : '' }}>{{ $contractor->name }}</option>
+                                    @endforeach
+                                </select>
+                            </td>
+                            <td style="min-width: 150px;">
+                                <select form="rehab-update-{{ $item->id }}" name="status" class="form-select form-select-sm" required>
+                                    @foreach(\App\Models\RehabLineItem::STATUSES as $value => $label)
+                                    <option value="{{ $value }}" {{ $item->status === $value ? 'selected' : '' }}>{{ __($label) }}</option>
+                                    @endforeach
+                                </select>
+                            </td>
+                            <td style="min-width: 140px;">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text">$</span>
+                                    <input form="rehab-update-{{ $item->id }}" type="number" name="amount_paid" class="form-control" value="{{ $rehabDirectEntryValue($item->amount_paid) }}" step="0.01" min="0">
+                                </div>
+                            </td>
+                            <td>{{ Fmt::currency($item->remaining_balance) }}</td>
+                            <td>
+                                <div class="d-flex gap-2">
+                                    <form id="rehab-update-{{ $item->id }}" method="POST" action="{{ route('deals.rehabItems.update', $item) }}">
+                                        @csrf
+                                        @method('PATCH')
+                                        <button type="submit" class="btn btn-sm btn-outline-primary">{{ __('Save') }}</button>
+                                    </form>
+                                    <form method="POST" action="{{ route('deals.rehabItems.destroy', $item) }}" onsubmit="return confirm('{{ __('Remove this rehab line item?') }}')">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">{{ __('Delete') }}</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+            @else
+            <div class="card-body border-bottom">
+                <p class="text-secondary mb-0">{{ __('No rehab line items have been added yet.') }}</p>
+            </div>
+            @endif
+            <div class="card-body">
+                <form method="POST" action="{{ route('deals.rehabItems.store', $deal) }}" class="row g-2 align-items-end">
+                    @csrf
+                    <div class="col-md-3">
+                        <label class="form-label">{{ __('Category') }}</label>
+                        <select name="category" class="form-select @error('category') is-invalid @enderror" required>
+                            <option value="">{{ __('Select category...') }}</option>
+                            @foreach($rehabCategories as $value => $label)
+                            <option value="{{ $value }}" {{ old('category') === $value ? 'selected' : '' }}>{{ __($label) }}</option>
+                            @endforeach
+                        </select>
+                        @error('category') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">{{ __('Line Item') }}</label>
+                        <input type="text" name="line_item" class="form-control @error('line_item') is-invalid @enderror" value="{{ old('line_item') }}" required>
+                        @error('line_item') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">{{ __('Budget') }}</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" name="budgeted_cost" class="form-control @error('budgeted_cost') is-invalid @enderror" value="{{ old('budgeted_cost', '') }}" step="0.01" min="0" required>
+                            @error('budgeted_cost') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">{{ __('Duration Days') }}</label>
+                        <input type="number" name="estimated_duration_days" class="form-control @error('estimated_duration_days') is-invalid @enderror" value="{{ old('estimated_duration_days') }}" min="0">
+                        @error('estimated_duration_days') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">{{ __('Contractor Assigned') }}</label>
+                        <select name="contractor_id" class="form-select @error('contractor_id') is-invalid @enderror">
+                            <option value="">{{ __('Unassigned') }}</option>
+                            @foreach($rehabContractors as $contractor)
+                            <option value="{{ $contractor->id }}" {{ old('contractor_id') == $contractor->id ? 'selected' : '' }}>{{ $contractor->name }}</option>
+                            @endforeach
+                        </select>
+                        @error('contractor_id') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">{{ __('Status') }}</label>
+                        <select name="status" class="form-select @error('status') is-invalid @enderror" required>
+                            @foreach(\App\Models\RehabLineItem::STATUSES as $value => $label)
+                            <option value="{{ $value }}" {{ old('status', 'not_started') === $value ? 'selected' : '' }}>{{ __($label) }}</option>
+                            @endforeach
+                        </select>
+                        @error('status') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">{{ __('Amount') }}</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" name="amount_paid" class="form-control @error('amount_paid') is-invalid @enderror" value="{{ old('amount_paid', '') }}" step="0.01" min="0">
+                            @error('amount_paid') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary w-100">{{ __('Add Item') }}</button>
+                    </div>
+                </form>
+            </div>
+        </div>
 
         <!-- Documents -->
         <div class="card mb-3">
@@ -247,10 +773,19 @@
                 @if($deal->documents->count())
                 <div class="list-group list-group-flush">
                     @foreach($deal->documents as $doc)
-                    <a href="{{ route('deals.downloadDocument', $doc) }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                        {{ $doc->original_name }}
-                        <small class="text-secondary">{{ number_format($doc->size / 1024, 1) }} KB</small>
-                    </a>
+                    <div class="list-group-item d-flex justify-content-between align-items-center gap-2">
+                        <a href="{{ route('deals.downloadDocument', $doc) }}" class="text-reset text-decoration-none text-truncate">
+                            {{ $doc->original_name }}
+                        </a>
+                        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                            <small class="text-secondary">{{ number_format($doc->size / 1024, 1) }} KB</small>
+                            <form action="{{ route('deals.destroyDocument', [$deal, $doc]) }}" method="POST" onsubmit="return confirm('{{ __('Delete this uploaded document?') }}')">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="btn btn-sm btn-outline-danger">{{ __('Delete') }}</button>
+                            </form>
+                        </div>
+                    </div>
                     @endforeach
                 </div>
                 @else
@@ -483,17 +1018,48 @@
             <div class="card-body">
                 <form id="deal-edit-form">
                     <div class="mb-2">
+                        <label class="form-label">{{ __('Title Company / Closing Attorney') }}</label>
+                        <select name="title_company_id" class="form-select form-select-sm">
+                            <option value="">{{ __('Not selected') }}</option>
+                            @foreach($titleCompanies as $titleCompany)
+                                <option value="{{ $titleCompany->id }}" {{ $deal->title_company_id === $titleCompany->id ? 'selected' : '' }}>{{ $titleCompany->name }}{{ $titleCompany->closing_attorney ? ' — '.$titleCompany->closing_attorney : '' }}</option>
+                            @endforeach
+                        </select>
+                        <div class="form-hint">{{ __('Select once to use the company and attorney in generated documents.') }} <a href="{{ route('title-companies.create') }}">{{ __('Add new') }}</a></div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">{{ __('Title Status') }}</label>
+                        <select name="title_status" class="form-select form-select-sm">
+                            <option value="">{{ __('Not Set') }}</option>
+                            @foreach(\App\Models\Deal::titleStatuses() as $statusKey => $statusLabel)
+                                <option value="{{ $statusKey }}" {{ $deal->title_status === $statusKey ? 'selected' : '' }}>{{ $statusLabel }}</option>
+                            @endforeach
+                        </select>
+                        <div class="form-hint">{{ __('Update manually as the transaction progresses.') }}</div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">{{ __('Deal Type') }}</label>
+                        <select name="deal_type" class="form-select form-select-sm">
+                            <option value="">{{ __('Not Set') }}</option>
+                            @foreach(\App\Models\Deal::dealTypes() as $typeKey => $typeLabel)
+                                <option value="{{ $typeKey }}" {{ $deal->deal_type === $typeKey ? 'selected' : '' }}>{{ $typeLabel }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="mb-2">
                         <label class="form-label">{{ __('Contract Price ($)') }}</label>
-                        <input type="number" name="contract_price" class="form-control form-control-sm" step="0.01" value="{{ $deal->contract_price }}">
+                        <input type="number" name="contract_price" id="deal-contract-price" class="form-control form-control-sm" step="0.01" min="0" value="{{ $directEntryValue($deal->contract_price) }}">
                     </div>
                     @if($businessMode === 'wholesale')
+                    @if($isWholesaleDeal)
                     <div class="mb-2">
                         <label class="form-label">{{ __('Assignment Fee ($)') }}</label>
-                        <input type="number" name="assignment_fee" class="form-control form-control-sm" step="0.01" value="{{ $deal->assignment_fee }}">
+                        <input type="number" name="assignment_fee" class="form-control form-control-sm" step="0.01" min="0" value="{{ $directEntryValue($deal->assignment_fee) }}">
                     </div>
+                    @endif
                     <div class="mb-2">
                         <label class="form-label">{{ __('Earnest Money ($)') }}</label>
-                        <input type="number" name="earnest_money" class="form-control form-control-sm" step="0.01" value="{{ $deal->earnest_money }}">
+                        <input type="number" name="earnest_money" id="deal-earnest-money" class="form-control form-control-sm" step="0.01" min="0" value="{{ $deal->earnest_money }}">
                     </div>
                     <div class="mb-2">
                         <label class="form-label">{{ __('Inspection Period (days)') }}</label>
@@ -609,6 +1175,27 @@ document.getElementById('deal-edit-form').addEventListener('submit', function(e)
         if (data.success) location.reload();
     });
 });
+
+(function () {
+    const contractPrice = document.getElementById('deal-contract-price');
+    const earnestMoney = document.getElementById('deal-earnest-money');
+    if (!contractPrice || !earnestMoney) return;
+
+    let manuallyEdited = false;
+    const setDefaultEarnestMoney = function () {
+        const amount = parseFloat(contractPrice.value);
+        if (!Number.isFinite(amount)) return;
+        earnestMoney.value = (amount * 0.01).toFixed(2);
+    };
+
+    earnestMoney.addEventListener('input', function () {
+        manuallyEdited = true;
+    });
+    contractPrice.addEventListener('input', function () {
+        if (!manuallyEdited) setDefaultEarnestMoney();
+    });
+    if (!earnestMoney.value && contractPrice.value) setDefaultEarnestMoney();
+})();
 
 // Track recently viewed
 if (window.trackRecentlyViewed) {

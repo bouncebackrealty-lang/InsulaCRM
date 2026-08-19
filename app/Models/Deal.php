@@ -26,6 +26,22 @@ class Deal extends Model
         'closed_lost' => 'Closed Lost',
     ];
 
+    public const DEAL_TYPES = [
+        'fix_and_flip' => 'Fix & Flip',
+        'wholesale' => 'Wholesale',
+        'rental' => 'Rental',
+        'other' => 'Other',
+    ];
+
+    public const TITLE_STATUSES = [
+        'selected' => 'Selected',
+        'title_opened' => 'Title Opened',
+        'title_review' => 'Title Review',
+        'clear_to_close' => 'Clear to Close',
+        'closed' => 'Closed',
+        'cancelled' => 'Cancelled',
+    ];
+
     /**
      * Get pipeline stages for the current tenant's business mode.
      */
@@ -53,10 +69,18 @@ class Deal extends Model
     protected $fillable = [
         'tenant_id',
         'lead_id',
+        'title_company_id',
+        'title_status',
+        'selected_buyer_id',
         'agent_id',
         'title',
         'stage',
+        'deal_type',
+        'is_priority',
         'stage_changed_at',
+        'buyers_notified_at',
+        'buyers_notified_count',
+        'buyer_notification_status',
         'contract_price',
         'assignment_fee',
         'earnest_money',
@@ -89,7 +113,30 @@ class Deal extends Model
             'brokerage_split_pct' => 'decimal:2',
             'listing_date' => 'date',
             'stage_changed_at' => 'datetime',
+            'buyers_notified_at' => 'datetime',
+            'buyers_notified_count' => 'integer',
+            'is_priority' => 'boolean',
         ];
+    }
+
+    public static function dealTypes(): array
+    {
+        return self::DEAL_TYPES;
+    }
+
+    public static function titleStatuses(): array
+    {
+        return self::TITLE_STATUSES;
+    }
+
+    public function getTitleStatusLabelAttribute(): string
+    {
+        return self::TITLE_STATUSES[$this->title_status] ?? __('Not Set');
+    }
+
+    public function getDealTypeLabelAttribute(): string
+    {
+        return self::DEAL_TYPES[$this->deal_type] ?? __('Not Set');
     }
 
     protected static function booted(): void
@@ -131,6 +178,31 @@ class Deal extends Model
     public function buyerMatches()
     {
         return $this->hasMany(DealBuyerMatch::class);
+    }
+
+    public function selectedBuyer()
+    {
+        return $this->belongsTo(Buyer::class, 'selected_buyer_id');
+    }
+
+    public function contractors()
+    {
+        return $this->hasMany(DealContractor::class);
+    }
+
+    public function lenders()
+    {
+        return $this->hasMany(DealLender::class);
+    }
+
+    public function titleCompany()
+    {
+        return $this->belongsTo(TitleCompany::class);
+    }
+
+    public function rehabLineItems()
+    {
+        return $this->hasMany(RehabLineItem::class)->latest();
     }
 
     public function activities()

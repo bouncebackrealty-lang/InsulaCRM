@@ -3,6 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\Lead;
+use App\Models\LeadPhoto;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
 
 class LeadManagementTest extends TestCase
@@ -84,6 +88,170 @@ class LeadManagementTest extends TestCase
         $leadPage->assertStatus(200);
         $leadPage->assertSee('View ARV / Comps');
         $leadPage->assertSee(route('properties.show', $property), false);
+    }
+
+    public function test_admin_can_select_mao_percentage_when_saving_property(): void
+    {
+        $this->actingAsAdmin();
+        $lead = $this->createLead();
+
+        $response = $this->post("/leads/{$lead->id}/property", [
+            'address' => '2524 Gordon Circle SE',
+            'city' => 'Atlanta',
+            'state' => 'GA',
+            'zip_code' => '30317',
+            'property_type' => 'single_family',
+            'condition' => 'fair',
+            'after_repair_value' => 340000,
+            'repair_estimate' => 60500,
+            'mao_percentage' => 72,
+            'our_offer' => 175000,
+        ]);
+
+        $response->assertRedirect("/leads/{$lead->id}");
+        $this->assertDatabaseHas('properties', [
+            'lead_id' => $lead->id,
+            'mao_percentage' => 72,
+            'maximum_allowable_offer' => 184300,
+        ]);
+        $this->assertEquals(9300, $lead->fresh()->property->assignment_fee);
+    }
+
+    public function test_admin_can_select_deal_type_on_property_intake_and_carry_it_to_deal(): void
+    {
+        $this->actingAsAdmin();
+        $lead = $this->createLead();
+
+        $leadPage = $this->get("/leads/{$lead->id}");
+        $leadPage->assertStatus(200);
+        $leadPage->assertSee('name="deal_type"', false);
+        $leadPage->assertSee('Fix &amp; Flip', false);
+        $leadPage->assertSee('Wholesale');
+        $leadPage->assertSee('Rental');
+
+        $response = $this->post("/leads/{$lead->id}/property", [
+            'address' => '4521 Mill Creek Road',
+            'city' => 'Atlanta',
+            'state' => 'GA',
+            'zip_code' => '30318',
+            'parcel_id' => 'ATL-30318-4521',
+            'property_type' => 'single_family',
+            'deal_type' => 'fix_and_flip',
+            'condition' => 'fair',
+            'after_repair_value' => 340000,
+            'repair_estimate' => 60500,
+            'mao_percentage' => 70,
+            'our_offer' => 175000,
+        ]);
+
+        $response->assertRedirect("/leads/{$lead->id}");
+        $this->assertDatabaseHas('properties', [
+            'lead_id' => $lead->id,
+            'deal_type' => 'fix_and_flip',
+            'parcel_id' => 'ATL-30318-4521',
+        ]);
+
+        $this->post("/leads/{$lead->id}/deals");
+
+        $this->assertDatabaseHas('deals', [
+            'lead_id' => $lead->id,
+            'deal_type' => 'fix_and_flip',
+        ]);
+        $this->assertDatabaseHas('deals', [
+            'lead_id' => $lead->id,
+            'earnest_money' => 1750,
+            'assignment_fee' => null,
+            'inspection_period_days' => 10,
+        ]);
+    }
+
+    public function test_property_detail_uses_direct_numeric_entry_for_bedrooms_and_bathrooms(): void
+    {
+        $this->actingAsAdmin();
+        $lead = $this->createLead();
+
+        $response = $this->get("/leads/{$lead->id}");
+
+        $response->assertOk();
+        $response->assertSee('type="text" inputmode="numeric" name="bedrooms"', false);
+        $response->assertSee('type="text" inputmode="numeric" name="bathrooms"', false);
+        $response->assertDontSee('type="number" name="bedrooms"', false);
+        $response->assertDontSee('type="number" name="bathrooms"', false);
+    }
+
+    public function test_distress_marker_picker_stays_open_for_multiple_selections_until_done(): void
+    {
+        $this->actingAsAdmin();
+        $lead = $this->createLead();
+
+        $response = $this->get("/leads/{$lead->id}");
+
+        $response->assertOk();
+        $response->assertSee('data-bs-auto-close="outside"', false);
+        $response->assertSee('id="distress-markers-done"', false);
+        $response->assertSee('Select all applicable markers, then click Done.');
+        $response->assertDontSee('Select one marker at a time; the menu closes after each selection.');
+        $response->assertDontSee('checkbox.checked = !checkbox.checked;\n            update();\n            bootstrap.Dropdown.getOrCreateInstance(toggle).hide();', false);
+    }
+
+    public function test_admin_can_upload_more_than_ten_photos_to_a_lead(): void
+    {
+        Storage::fake('public');
+        $this->actingAsAdmin();
+        $lead = $this->createLead();
+
+        $photos = [];
+        for ($i = 1; $i <= 12; $i++) {
+            $photos[] = UploadedFile::fake()->image("phase-{$i}.jpg", 20, 20);
+        }
+
+        $response = $this->post("/leads/{$lead->id}/photos", [
+            'photos' => $photos,
+        ]);
+
+        $response->assertRedirect("/leads/{$lead->id}");
+        $this->assertSame(12, LeadPhoto::where('lead_id', $lead->id)->count());
+    }
+
+    public function test_photo_uploader_view_keeps_multi_file_selection_in_javascript_and_uploads_one_file_per_request(): void
+    {
+        $this->actingAsAdmin();
+        $lead = $this->createLead();
+
+        $response = $this->get("/leads/{$lead->id}");
+
+        $response->assertOk();
+        $response->assertSee('var selectedFiles = [];', false);
+        $response->assertSee("payload.append('photos[]', files[index]);", false);
+        $response->assertDontSee('fileInput.files = e.dataTransfer.files;', false);
+    }
+
+    public function test_photo_delete_returns_to_the_photos_section(): void
+    {
+        Storage::fake('public');
+        $this->actingAsAdmin();
+        $lead = $this->createLead();
+        $photo = LeadPhoto::create([
+            'tenant_id' => $this->tenant->id, 'lead_id' => $lead->id, 'uploaded_by' => $this->adminUser->id,
+            'filename' => 'photo.jpg', 'original_name' => 'photo.jpg', 'path' => 'lead-photos/test/photo.jpg', 'mime_type' => 'image/jpeg', 'size' => 10,
+        ]);
+
+        $this->delete(route('leads.photos.delete', [$lead, $photo]))
+            ->assertRedirect(route('leads.show', $lead) . '#photos-section');
+    }
+
+    public function test_signed_buyer_photo_gallery_shows_all_property_photos_without_login(): void
+    {
+        $this->actingAsAdmin();
+        $lead = $this->createLead();
+        $this->createProperty(['lead_id' => $lead->id, 'address' => 'Gallery Street', 'city' => 'Atlanta', 'state' => 'GA', 'zip_code' => '30318']);
+        LeadPhoto::create(['tenant_id' => $this->tenant->id, 'lead_id' => $lead->id, 'uploaded_by' => $this->adminUser->id, 'filename' => 'one.jpg', 'original_name' => 'one.jpg', 'path' => 'lead-photos/one.jpg', 'mime_type' => 'image/jpeg', 'size' => 10]);
+        LeadPhoto::create(['tenant_id' => $this->tenant->id, 'lead_id' => $lead->id, 'uploaded_by' => $this->adminUser->id, 'filename' => 'two.jpg', 'original_name' => 'two.jpg', 'path' => 'lead-photos/two.jpg', 'mime_type' => 'image/jpeg', 'size' => 10]);
+
+        $url = URL::temporarySignedRoute('buyer-photo-gallery.show', now()->addHour(), ['lead' => $lead->id]);
+        auth()->logout();
+        $this->get($url)->assertOk()->assertSee('Property Photos')->assertSee('lead-photos/one.jpg')->assertSee('lead-photos/two.jpg');
+        $this->get(route('buyer-photo-gallery.show', $lead))->assertForbidden();
     }
 
     public function test_admin_can_create_lead_assigned_to_agent_team_member(): void

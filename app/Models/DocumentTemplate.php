@@ -22,6 +22,7 @@ class DocumentTemplate extends Model
         'type',
         'content',
         'merge_fields',
+        'input_fields',
         'is_default',
     ];
 
@@ -29,6 +30,7 @@ class DocumentTemplate extends Model
     {
         return [
             'merge_fields' => 'array',
+            'input_fields' => 'array',
             'is_default' => 'boolean',
         ];
     }
@@ -48,7 +50,7 @@ class DocumentTemplate extends Model
      */
     public static function typeLabels(): array
     {
-        return array_map(fn($label) => __($label), self::TYPES);
+        return array_map(fn ($label) => __($label), self::TYPES);
     }
 
     /**
@@ -72,8 +74,13 @@ class DocumentTemplate extends Model
             'deal.stage' => __('Deal Stage'),
             'deal.contract_price' => __('Contract Price'),
             'deal.earnest_money' => __('Earnest Money'),
+            'deal.inspection_period_days' => __('Inspection / Due Diligence Days'),
+            'deal.due_diligence_end_date' => __('Due Diligence End Date'),
             'deal.contract_date' => __('Contract Date'),
             'deal.closing_date' => __('Closing Date'),
+            'deal.closing_month_day' => __('Closing Month and Day'),
+            'deal.closing_year' => __('Closing Year'),
+            'deal.total_purchase_price' => __('Total Purchase Price'),
             'deal.notes' => __('Deal Notes'),
         ];
 
@@ -98,6 +105,7 @@ class DocumentTemplate extends Model
             ],
             __('Property') => [
                 'property.address' => __('Property Address'),
+                'property.parcel_id' => __('Parcel ID / Legal Description'),
                 'property.city' => __('City'),
                 'property.state' => __('State'),
                 'property.zip_code' => __('Zip Code'),
@@ -127,17 +135,48 @@ class DocumentTemplate extends Model
                 'buyer.first_name' => __($isRE ? 'Client First Name' : 'Buyer First Name'),
                 'buyer.last_name' => __($isRE ? 'Client Last Name' : 'Buyer Last Name'),
                 'buyer.company' => __($isRE ? 'Client Company' : 'Buyer Company'),
+                'buyer.top_match' => __($isRE ? 'Top Matched Client' : 'Top Matched Buyer'),
                 'buyer.phone' => __($isRE ? 'Client Phone' : 'Buyer Phone'),
                 'buyer.email' => __($isRE ? 'Client Email' : 'Buyer Email'),
+                'buyer.address' => __($isRE ? 'Client Address' : 'Buyer Address'),
+                'buyer.full_address' => __($isRE ? 'Client Full Address' : 'Buyer Full Address'),
+            ],
+            __('Contractor') => [
+                'contractor.name' => __('Contractor Name'),
+                'contractor.business_name' => __('Contractor Business Name / Entity'),
+                'contractor.phone' => __('Contractor Phone'),
+                'contractor.email' => __('Contractor Email'),
+                'contractor.mailing_address' => __('Contractor Mailing Address'),
+                'contractor.license_number' => __('Contractor License Number'),
+                'contractor.trade' => __('Contractor Trade / Specialty'),
+                'contractor.service_area' => __('Contractor Service Area'),
+                'contractor.status' => __('Contractor Status'),
+                'contractor.notes' => __('Contractor Notes'),
             ],
             __('Company') => [
                 'company.name' => __('Company Name'),
                 'company.email' => __('Company Email'),
                 'company.phone' => __('Company Phone'),
             ],
+            __('Selected Lender') => [
+                'lender.name' => __('Lender Name'),
+                'lender.company' => __('Lender Company'),
+                'lender.phone' => __('Lender Phone'),
+                'lender.email' => __('Lender Email'),
+            ],
+            __('Title Company / Closing Attorney') => [
+                'title_company.name' => __('Title Company Name'),
+                'title_company.closing_attorney' => __('Closing Attorney'),
+                'title_company.address' => __('Title Company Address'),
+                'title_company.full_address' => __('Title Company Full Address'),
+                'title_company.phone' => __('Title Company Phone'),
+                'title_company.email' => __('Title Company Email'),
+            ],
             __('Dates') => [
                 'today' => __('Today (short)'),
                 'today_long' => __('Today (long format)'),
+                'today_month_day' => __('Today (month and day)'),
+                'today_year' => __('Today (year)'),
             ],
         ];
     }

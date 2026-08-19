@@ -74,10 +74,16 @@ class PropertyController extends Controller
         $data['tenant_id'] = auth()->user()->tenant_id;
         $data['lead_id'] = $lead->id;
 
-        // Compute MAO: (ARV x 0.70) - Repair Estimate (wholesale only)
+        $data['mao_percentage'] = (int) ($data['mao_percentage'] ?? 70);
+
+        // Compute MAO: (ARV x selected percentage) - Repair Estimate (wholesale only)
         if (!\App\Services\BusinessModeService::isRealEstate()
             && !empty($data['after_repair_value']) && !empty($data['repair_estimate'])) {
-            $data['maximum_allowable_offer'] = ($data['after_repair_value'] * 0.70) - $data['repair_estimate'];
+            $data['maximum_allowable_offer'] = Property::calculateMao(
+                (float) $data['after_repair_value'],
+                (float) $data['repair_estimate'],
+                $data['mao_percentage']
+            );
         }
 
         $property = Property::updateOrCreate(

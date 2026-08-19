@@ -17,6 +17,10 @@ class Buyer extends Model
         'company',
         'phone',
         'email',
+        'address',
+        'city',
+        'state',
+        'zip_code',
         'max_purchase_price',
         'preferred_property_types',
         'preferred_zip_codes',
@@ -75,5 +79,15 @@ class Buyer extends Model
     public function getFullNameAttribute(): string
     {
         return "{$this->first_name} {$this->last_name}";
+    }
+
+    public function getFullAddressAttribute(): string
+    {
+        $locality = trim(collect([
+            $this->city,
+            trim(collect([$this->state, $this->zip_code])->filter()->implode(' ')),
+        ])->filter()->implode(', '));
+
+        return collect([$this->address, $locality])->filter()->implode(', ');
     }
 }

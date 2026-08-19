@@ -46,13 +46,19 @@
                 @if($templates->count())
                 <form method="POST" action="{{ route('documents.store', $deal) }}" id="generate-form">
                     @csrf
+                    <input type="hidden" name="preview_controls" id="preview-controls-input" value="">
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <label class="form-label required">{{ __('Select Template') }}</label>
                             <select name="template_id" id="template-select" class="form-select" required>
                                 <option value="">{{ __('Choose a template...') }}</option>
                                 @foreach($templates as $template)
-                                    <option value="{{ $template->id }}" data-type="{{ $template->type }}">
+                                    @php
+                                        $needsSelectedBuyer = collect($template->merge_fields ?? [])->contains(
+                                            fn ($field) => str_starts_with((string) $field, 'buyer.')
+                                        ) || str_contains((string) $template->content, '{{buyer.');
+                                    @endphp
+                                    <option value="{{ $template->id }}" data-type="{{ $template->type }}" data-needs-buyer="{{ $needsSelectedBuyer ? '1' : '0' }}" data-input-fields='@json($template->input_fields ?? [])' data-edit-url="{{ route('document-templates.edit', $template) }}">
                                         {{ $template->name }}
                                         ({{ \App\Models\DocumentTemplate::typeLabel($template->type) }})
                                         {{ $template->is_default ? ' *' : '' }}
@@ -65,12 +71,37 @@
                             <input type="text" name="name" class="form-control" placeholder="{{ __('Auto-generated from template + deal name') }}">
                         </div>
                     </div>
+                    <div class="alert alert-warning py-2 mb-3" id="selected-buyer-warning" style="display:none;">
+                        {{ __('This template uses buyer information. Select the Buyer for This Deal before generating it.') }}
+                        <a href="{{ route('deals.show', $deal) }}#deal-buyer-selection" class="alert-link">{{ __('Select buyer') }}</a>
+                    </div>
+                    @if($contractors->isNotEmpty())
+                    <div class="mb-3" id="contractor-field-wrap" style="display:none;">
+                        <label class="form-label">{{ __('Contractor for this document') }} <small class="text-secondary">({{ __('optional') }})</small></label>
+                        <select name="contractor_id" id="contractor-select" class="form-select">
+                            <option value="">{{ __('No contractor information') }}</option>
+                            @foreach($contractors as $contractor)
+                                <option value="{{ $contractor->id }}">{{ $contractor->name }}{{ $contractor->service_area ? ' — ' . $contractor->service_area : '' }}</option>
+                            @endforeach
+                        </select>
+                        <small class="text-secondary">{{ __('When one contractor is attached to the deal, it is used automatically. Choose a contractor here when more than one is attached.') }}</small>
+                    </div>
+                    @endif
+
+                    <div id="document-inputs-wrap" class="mb-3" style="display:none;">
+                        <label class="form-label">{{ __('Document-specific details') }}</label>
+                        <div class="form-hint mb-2">{{ __('Enter any values that should appear only in this generated document. They remain editable in the generated document afterward.') }}</div>
+                        <div id="document-inputs" class="row g-2"></div>
+                    </div>
 
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary" id="generate-btn" disabled>
                             <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z"/><path d="M12 11v6"/><path d="M9 14l3 -3l3 3"/></svg>
                             {{ __('Generate Document') }}
                         </button>
+                        @if(auth()->user()->isAdmin())
+                        <a href="#" class="btn btn-outline-primary d-none" id="edit-master-template-btn">{{ __('Edit Master Template') }}</a>
+                        @endif
                         <button type="button" class="btn btn-outline-secondary" id="preview-deal-btn" disabled>
                             <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/><path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/></svg>
                             {{ __('Preview with Deal Data') }}
@@ -106,7 +137,7 @@
                     <div class="spinner-border text-primary" role="status"></div>
                     <p class="text-secondary mt-2">{{ __('Loading preview...') }}</p>
                 </div>
-                <div id="preview-content" style="border: 1px solid #e6e8eb; padding: 20px; background: #fff; min-height: 200px;"></div>
+                <div id="preview-content" class="generated-document-content" style="border: 1px solid #e6e8eb; padding: 20px; background: #fff; min-height: 200px;"></div>
             </div>
         </div>
     </div>
@@ -184,13 +215,34 @@
                     @endif
                 </div>
                 <div class="mb-3">
-                    <h4 class="text-secondary mb-1">{{ __('Buyer (Top Match)') }}</h4>
-                    @php $topBuyer = $deal->buyerMatches->sortByDesc('match_score')->first(); @endphp
-                    @if($topBuyer && $topBuyer->buyer)
-                        <div>{{ $topBuyer->buyer->first_name }} {{ $topBuyer->buyer->last_name }}</div>
-                        <div class="text-secondary small">{{ $topBuyer->buyer->company }}</div>
+                    <h4 class="text-secondary mb-1">{{ __('Buyer for Documents') }}</h4>
+                    @if($deal->selectedBuyer)
+                        <div>{{ $deal->selectedBuyer->first_name }} {{ $deal->selectedBuyer->last_name }}</div>
+                        <div class="text-secondary small">{{ $deal->selectedBuyer->company }}</div>
                     @else
-                        <span class="text-warning">{{ __('No buyer matched') }}</span>
+                        <span class="text-warning">{{ __('No buyer selected') }}</span>
+                        <div><a href="{{ route('deals.show', $deal) }}#deal-buyer-selection" class="small">{{ __('Select buyer for this deal') }}</a></div>
+                    @endif
+                </div>
+                <div class="mb-3">
+                    <h4 class="text-secondary mb-1">{{ __('Selected Lender') }}</h4>
+                    @php $selectedLender = $deal->lenders->first()?->lender; @endphp
+                    @if($selectedLender)
+                        <div>{{ $selectedLender->company ?: $selectedLender->name }}</div>
+                        @if($selectedLender->phone || $selectedLender->email)
+                            <div class="text-secondary small">{{ $selectedLender->phone }} {{ $selectedLender->email ? '| ' . $selectedLender->email : '' }}</div>
+                        @endif
+                    @else
+                        <span class="text-warning">{{ __('No lender selected') }}</span>
+                    @endif
+                </div>
+                <div class="mb-3">
+                    <h4 class="text-secondary mb-1">{{ __('Title Company / Closing Attorney') }}</h4>
+                    @if($deal->titleCompany)
+                        <div>{{ $deal->titleCompany->name }}</div>
+                        <div class="text-secondary small">{{ $deal->titleCompany->closing_attorney }}{{ $deal->titleCompany->full_address ? ($deal->titleCompany->closing_attorney ? ' | ' : '') . $deal->titleCompany->full_address : '' }}</div>
+                    @else
+                        <span class="text-warning">{{ __('No title company selected') }}</span>
                     @endif
                 </div>
                 <div>
@@ -211,44 +263,158 @@
 </div>
 @endsection
 
+@push('styles')
+<style>
+    .generated-document-content .footer,
+    .generated-document-content .document-tagline {
+        position: static !important;
+        clear: both;
+        margin-top: clamp(22px, 3vw, 32px) !important;
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+</style>
+@endpush
+
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     var templateSelect = document.getElementById('template-select');
+    var generateForm = document.getElementById('generate-form');
     var generateBtn = document.getElementById('generate-btn');
     var previewBtn = document.getElementById('preview-deal-btn');
     var previewCard = document.getElementById('preview-card');
     var previewLoading = document.getElementById('preview-loading');
     var previewContent = document.getElementById('preview-content');
+    var contractorSelect = document.getElementById('contractor-select');
+    var contractorFieldWrap = document.getElementById('contractor-field-wrap');
+    var inputsWrap = document.getElementById('document-inputs-wrap');
+    var inputsContainer = document.getElementById('document-inputs');
+    var masterEditButton = document.getElementById('edit-master-template-btn');
+    var previewControlsInput = document.getElementById('preview-controls-input');
+    var selectedBuyerWarning = document.getElementById('selected-buyer-warning');
+    var hasSelectedBuyer = {{ $deal->selectedBuyer ? 'true' : 'false' }};
     var csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+    var previewRequestId = 0;
 
     // Enable/disable buttons on template select
     templateSelect.addEventListener('change', function() {
         var hasValue = !!this.value;
-        generateBtn.disabled = !hasValue;
+        var selectedOption = this.options[this.selectedIndex];
+        var buyerRequired = hasValue && selectedOption.dataset.needsBuyer === '1';
+        var buyerMissing = buyerRequired && !hasSelectedBuyer;
+        generateBtn.disabled = !hasValue || buyerMissing;
         previewBtn.disabled = !hasValue;
+        selectedBuyerWarning.style.display = buyerMissing ? 'block' : 'none';
 
         if (hasValue) {
-            loadPreview(this.value);
+            renderDocumentInputs(this.options[this.selectedIndex]);
+            updateContractorVisibility();
+            loadPreview(this.value, false);
+        } else {
+            inputsWrap.style.display = 'none';
+            inputsContainer.innerHTML = '';
+            if (contractorFieldWrap) contractorFieldWrap.style.display = 'none';
+            if (masterEditButton) masterEditButton.classList.add('d-none');
+            selectedBuyerWarning.style.display = 'none';
         }
     });
 
     // Preview button
     previewBtn.addEventListener('click', function() {
         if (templateSelect.value) {
-            loadPreview(templateSelect.value);
+            loadPreview(templateSelect.value, true);
         }
     });
+
+    if (contractorSelect) {
+        contractorSelect.addEventListener('change', function() {
+            if (templateSelect.value) {
+                loadPreview(templateSelect.value, true);
+            }
+        });
+    }
+
+    function renderDocumentInputs(option) {
+        var fields = [];
+        try { fields = JSON.parse(option.dataset.inputFields || '[]'); } catch (e) { fields = []; }
+        inputsContainer.innerHTML = '';
+        inputsWrap.style.display = fields.length ? 'block' : 'none';
+        fields.forEach(function(field) {
+            var column = document.createElement('div');
+            column.className = 'col-md-6';
+            var label = document.createElement('label');
+            label.className = 'form-label';
+            label.textContent = field.label;
+            column.appendChild(label);
+            var input;
+            if (field.type === 'radio') {
+                column.className = 'col-12';
+                var radioGroup = document.createElement('div');
+                radioGroup.className = 'd-flex flex-wrap gap-3';
+                (field.options || []).forEach(function(value) {
+                    var wrap = document.createElement('label'); wrap.className = 'form-check form-check-inline';
+                    var radio = document.createElement('input'); radio.type = 'radio'; radio.className = 'form-check-input'; radio.name = 'document_inputs[' + field.key + ']'; radio.value = value; radio.dataset.documentInput = 'true';
+                    radio.addEventListener('change', function() { if (templateSelect.value) loadPreview(templateSelect.value, true); });
+                    var text = document.createElement('span'); text.className = 'form-check-label'; text.textContent = value;
+                    wrap.appendChild(radio); wrap.appendChild(text); radioGroup.appendChild(wrap);
+                });
+                column.appendChild(radioGroup);
+                inputsContainer.appendChild(column);
+                return;
+            } else if (field.type === 'select') {
+                input = document.createElement('select');
+                input.className = 'form-select';
+                var empty = document.createElement('option'); empty.value = ''; empty.textContent = '{{ __('Select...') }}'; input.appendChild(empty);
+                (field.options || []).forEach(function(value) { var item = document.createElement('option'); item.value = value; item.textContent = value; input.appendChild(item); });
+            } else {
+                input = document.createElement('input');
+                input.type = field.type === 'date' ? 'date' : 'text';
+                input.className = 'form-control';
+            }
+            input.name = 'document_inputs[' + field.key + ']';
+            input.dataset.documentInput = 'true';
+            input.addEventListener('change', function() { if (templateSelect.value) loadPreview(templateSelect.value, true); });
+            column.appendChild(input);
+            inputsContainer.appendChild(column);
+        });
+        if (masterEditButton) {
+            masterEditButton.href = option.dataset.editUrl;
+            masterEditButton.classList.remove('d-none');
+        }
+    }
+
+    function updateContractorVisibility() {
+        if (!contractorFieldWrap) return;
+
+        var selectedOption = templateSelect.options[templateSelect.selectedIndex];
+        var isAcquisitionAgreement = selectedOption
+            && ['loi', 'purchase_agreement'].indexOf(selectedOption.dataset.type) !== -1;
+
+        contractorFieldWrap.style.display = templateSelect.value && !isAcquisitionAgreement ? 'block' : 'none';
+
+        if (isAcquisitionAgreement && contractorSelect) {
+            contractorSelect.value = '';
+        }
+    }
 
     // Close preview
     document.getElementById('close-preview-btn').addEventListener('click', function() {
         previewCard.style.display = 'none';
     });
 
-    function loadPreview(templateId) {
+    if (generateForm) {
+        generateForm.addEventListener('submit', function() {
+            previewControlsInput.value = JSON.stringify(collectPreviewControls());
+        });
+    }
+
+    function loadPreview(templateId, preserveControls) {
+        var preservedControls = preserveControls ? collectPreviewControls() : [];
+        var requestId = ++previewRequestId;
         previewCard.style.display = 'block';
-        previewLoading.style.display = 'block';
-        previewContent.innerHTML = '';
+        previewLoading.style.display = previewContent.innerHTML.trim() ? 'none' : 'block';
+        previewContent.style.opacity = '0.65';
 
         fetch('{{ url("/documents/preview-deal/" . $deal->id) }}', {
             method: 'POST',
@@ -257,17 +423,67 @@ document.addEventListener('DOMContentLoaded', function() {
                 'X-CSRF-TOKEN': csrfToken,
                 'Accept': 'application/json',
             },
-            body: JSON.stringify({ template_id: templateId })
+            body: JSON.stringify({
+                template_id: templateId,
+                contractor_id: contractorSelect ? contractorSelect.value : null,
+                document_inputs: previewDocumentInputs(),
+            })
         })
         .then(function(r) { return r.json(); })
         .then(function(data) {
+            if (requestId !== previewRequestId) return;
             previewLoading.style.display = 'none';
-            previewContent.innerHTML = data.html || '';
+            if (data.html) {
+                previewContent.innerHTML = data.html;
+                restorePreviewControls(preservedControls);
+            }
+            previewContent.style.opacity = '1';
         })
         .catch(function() {
+            if (requestId !== previewRequestId) return;
             previewLoading.style.display = 'none';
-            previewContent.innerHTML = '<div class="alert alert-danger">{{ __('Failed to load preview.') }}</div>';
+            if (!previewContent.innerHTML.trim()) {
+                previewContent.innerHTML = '<div class="alert alert-danger">{{ __('Failed to load preview.') }}</div>';
+            }
+            previewContent.style.opacity = '1';
         });
+    }
+
+    function collectPreviewControls() {
+        return Array.prototype.map.call(
+            previewContent.querySelectorAll('input, textarea, select'),
+            function(control, index) {
+                return {
+                    index: index,
+                    tag: control.tagName.toLowerCase(),
+                    type: (control.type || '').toLowerCase(),
+                    value: control.value || '',
+                    checked: !!control.checked
+                };
+            }
+        );
+    }
+
+    function restorePreviewControls(controls) {
+        var elements = previewContent.querySelectorAll('input, textarea, select');
+        controls.forEach(function(saved) {
+            var control = elements[saved.index];
+            if (!control || control.tagName.toLowerCase() !== saved.tag) return;
+
+            control.value = saved.value;
+            if (saved.type === 'checkbox' || saved.type === 'radio') {
+                control.checked = !!saved.checked;
+            }
+        });
+    }
+
+    function previewDocumentInputs() {
+        var inputs = {};
+        document.querySelectorAll('[data-document-input="true"]').forEach(function(input) {
+            var match = input.name.match(/^document_inputs\[([^\]]+)\]$/);
+            if (match && (input.type !== 'radio' || input.checked)) inputs[match[1]] = input.value;
+        });
+        return inputs;
     }
 });
 </script>

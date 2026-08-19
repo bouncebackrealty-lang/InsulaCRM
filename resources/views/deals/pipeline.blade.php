@@ -1,1128 +1,947 @@
 @extends('layouts.app')
 
-@section('title', ($businessMode ?? 'wholesale') === 'realestate' ? __('Transactions') : __('Pipeline'))
-@section('page-title', ($businessMode ?? 'wholesale') === 'realestate' ? __('Transaction Pipeline') : __('Deal Pipeline'))
+@section('title', __('Pipeline'))
+@section('page-title', __('Pipeline'))
+
+@php
+    $formatMoney = fn ($value) => $value !== null && $value !== '' ? Fmt::currency($value, 0) : '-';
+    $stageColors = [
+        'prospecting' => 'pipeline-stage-prospecting',
+        'contacting' => 'pipeline-stage-contacting',
+        'engaging' => 'pipeline-stage-engaging',
+        'offer_presented' => 'pipeline-stage-offer-presented',
+        'under_contract' => 'pipeline-stage-under-contract',
+        'dispositions' => 'pipeline-stage-dispositions',
+        'assigned' => 'pipeline-stage-assigned',
+        'closing' => 'pipeline-stage-closing',
+        'closed_won' => 'pipeline-stage-closed-won',
+        'closed_lost' => 'pipeline-stage-closed-lost',
+        'lead' => 'pipeline-stage-lead',
+        'listing_agreement' => 'pipeline-stage-listing-agreement',
+        'active_listing' => 'pipeline-stage-active-listing',
+        'showing' => 'pipeline-stage-showing',
+        'offer_received' => 'pipeline-stage-offer-received',
+        'inspection' => 'pipeline-stage-inspection',
+        'under_inspection' => 'pipeline-stage-inspection',
+        'appraisal' => 'pipeline-stage-appraisal',
+    ];
+    $fallbackStageColor = 'pipeline-stage-default';
+    $pipelineStageLabels = $stages;
+    $pipelineStageLabels['closed_won'] = __('Closed');
+    $buildViewUrl = fn ($view) => request()->fullUrlWithQuery(['view' => $view]);
+@endphp
 
 @push('styles')
 <style>
-    /* ── Filters ──────────────────────────────────────── */
-    .pipeline-filters {
+    .pipeline-shell {
         display: flex;
-        gap: 12px;
-        margin-bottom: 16px;
-        flex-wrap: wrap;
-        align-items: center;
-    }
-    .pipeline-filters .form-control,
-    .pipeline-filters .form-select {
-        max-width: 220px;
+        flex-direction: column;
+        gap: 18px;
     }
 
-    /* ── Stage rows (accordion) ───────────────────────── */
-    .stage-row {
-        border: 1px solid #e6e7e9;
-        border-radius: 8px;
-        margin-bottom: 8px;
-        background: #fff;
-        transition: background 0.15s, box-shadow 0.15s;
-    }
-    .stage-row.drag-over {
-        background: #e8f0fe;
-        box-shadow: inset 0 0 0 2px #206bc4;
-    }
-    .stage-header {
+    .pipeline-header {
         display: flex;
-        align-items: center;
-        padding: 12px 16px;
-        cursor: pointer;
-        user-select: none;
-        gap: 12px;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
     }
-    .stage-header:hover {
-        background: #f8f9fa;
-        border-radius: 8px;
+
+    .pipeline-title {
+        margin: 0;
+        font-size: 1.45rem;
+        font-weight: 700;
+        color: #101828;
     }
-    .stage-chevron {
-        transition: transform 0.2s;
-        color: #adb5bd;
-        flex-shrink: 0;
-    }
-    .stage-row.expanded .stage-chevron {
-        transform: rotate(90deg);
-    }
-    .stage-name {
-        font-weight: 600;
-        font-size: 0.925rem;
-        flex-shrink: 0;
-    }
-    .stage-stats {
-        display: flex;
-        gap: 12px;
-        align-items: center;
-        margin-left: auto;
-        font-size: 0.8rem;
+
+    .pipeline-subtitle {
+        margin: 4px 0 0;
         color: #667085;
-        flex-shrink: 0;
-    }
-    .stage-stats .badge {
-        font-size: 0.75rem;
+        font-size: 0.9rem;
     }
 
-    /* ── Expanded card grid ────────────────────────────── */
-    .stage-cards {
-        display: none;
-        padding: 4px 16px 16px;
-    }
-    .stage-row.expanded .stage-cards {
-        display: block;
-    }
-    .stage-cards-grid {
+    .pipeline-summary-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-        gap: 10px;
-    }
-    .stage-empty {
-        grid-column: 1 / -1;
-        text-align: center;
-        padding: 20px;
-        color: #adb5bd;
-        font-size: 0.85rem;
+        grid-template-columns: repeat(5, minmax(150px, 1fr));
+        gap: 12px;
     }
 
-    /* ── Deal cards ────────────────────────────────────── */
-    .deal-card {
-        background: #f8f9fa;
+    .pipeline-summary-card {
         border: 1px solid #e6e7e9;
-        border-radius: 6px;
-        padding: 12px;
-        position: relative;
-        transition: box-shadow 0.2s, opacity 0.2s;
-    }
-    .deal-card:hover {
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        border-radius: 7px;
         background: #fff;
-    }
-    .deal-card.dragging {
-        opacity: 0.4;
-        transform: rotate(1deg);
-    }
-    .deal-card-drag {
-        cursor: grab;
-        color: #adb5bd;
-        position: absolute;
-        top: 10px;
-        right: 8px;
-        padding: 2px;
-        line-height: 1;
-    }
-    .deal-card-drag:hover { color: #667085; }
-    .deal-card-drag:active { cursor: grabbing; }
-    .deal-card .move-dropdown { position: absolute; bottom: 4px; right: 4px; }
-    .deal-card .move-dropdown .btn { padding: 2px 4px; line-height: 1; }
-    .deal-card-body {
-        cursor: pointer;
-    }
-    .deal-card-title {
-        font-weight: 600;
-        font-size: 0.875rem;
-        margin-bottom: 4px;
-        padding-right: 20px;
-    }
-    .deal-card-meta {
-        font-size: 0.75rem;
-        color: #667085;
-        line-height: 1.5;
+        padding: 14px;
+        min-height: 86px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
     }
 
-    /* ── Slide-over ────────────────────────────────────── */
-    .slide-over {
-        position: fixed;
-        top: 0;
-        right: -450px;
-        width: 450px;
-        height: 100%;
-        background: #fff;
-        box-shadow: -4px 0 20px rgba(0,0,0,0.15);
-        z-index: 1050;
-        transition: right 0.3s;
-        overflow-y: auto;
-        padding: 24px;
-    }
-    .slide-over.open { right: 0; }
-    .slide-over-backdrop {
-        position: fixed;
-        top: 0; left: 0;
-        width: 100%; height: 100%;
-        background: rgba(0,0,0,0.3);
-        z-index: 1040;
-        display: none;
-    }
-    .slide-over-backdrop.open { display: block; }
-    .slide-over .badge { color: #fff; }
-
-    /* ── Toast ─────────────────────────────────────────── */
-    .toast-container {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        z-index: 1060;
-    }
-    .pipeline-toast {
-        padding: 12px 20px;
-        border-radius: 6px;
-        color: #fff;
-        font-size: 0.875rem;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        opacity: 0;
-        transition: opacity 0.3s;
-        margin-top: 8px;
-    }
-    .pipeline-toast.show { opacity: 1; }
-    .pipeline-toast.success { background: #2fb344; }
-    .pipeline-toast.error { background: #d63939; }
-
-    /* ── Quick Edit ────────────────────────────────────── */
-    .deal-card .quick-edit-btn {
-        position: absolute;
-        top: 4px;
-        right: 28px;
-        opacity: 0;
-        transition: opacity 0.15s;
-        z-index: 2;
-    }
-    .deal-card:hover .quick-edit-btn {
-        opacity: 1;
-    }
-    .quick-edit-form .form-control-sm {
-        font-size: 0.8rem;
-        padding: 0.2rem 0.4rem;
-    }
-    .quick-edit-form .form-label-sm {
-        font-size: 0.75rem;
-        color: #667085;
-    }
-
-    /* ── Stage SLA warnings ──────────────────────────── */
-    .deal-card.deal-age-warning {
-        border-left: 4px solid #f59f00;
-        background: #fffdf5;
-    }
-    .deal-card.deal-age-critical {
-        border-left: 4px solid #d63939;
-        background: #fff0f0;
-    }
-    [data-bs-theme="dark"] .deal-card.deal-age-warning {
-        background: #2a2410;
-    }
-    [data-bs-theme="dark"] .deal-card.deal-age-critical {
-        background: #2c1a1a;
-    }
-    .deal-age-badge {
+    .summary-icon {
+        width: 42px;
+        height: 42px;
+        border-radius: 7px;
         display: inline-flex;
         align-items: center;
-        gap: 3px;
-        font-size: 0.7rem;
+        justify-content: center;
+        color: #fff;
+        flex: 0 0 auto;
+    }
+
+    .pipeline-stage-total { background: #0f172a !important; color: #fff !important; }
+    .pipeline-stage-prospecting { background: #64748b !important; color: #fff !important; }
+    .pipeline-stage-contacting { background: #0891b2 !important; color: #fff !important; }
+    .pipeline-stage-engaging { background: #2563eb !important; color: #fff !important; }
+    .pipeline-stage-offer-presented { background: #f97316 !important; color: #fff !important; }
+    .pipeline-stage-under-contract { background: #16a34a !important; color: #fff !important; }
+    .pipeline-stage-dispositions { background: #9333ea !important; color: #fff !important; }
+    .pipeline-stage-assigned { background: #4f46e5 !important; color: #fff !important; }
+    .pipeline-stage-closing { background: #ca8a04 !important; color: #fff !important; }
+    .pipeline-stage-closed-won { background: #0f766e !important; color: #fff !important; }
+    .pipeline-stage-closed-lost { background: #dc2626 !important; color: #fff !important; }
+    .pipeline-stage-lead { background: #64748b !important; color: #fff !important; }
+    .pipeline-stage-listing-agreement { background: #0891b2 !important; color: #fff !important; }
+    .pipeline-stage-active-listing { background: #2563eb !important; color: #fff !important; }
+    .pipeline-stage-showing { background: #7c3aed !important; color: #fff !important; }
+    .pipeline-stage-offer-received { background: #f97316 !important; color: #fff !important; }
+    .pipeline-stage-inspection { background: #84cc16 !important; color: #172554 !important; }
+    .pipeline-stage-appraisal { background: #d946ef !important; color: #fff !important; }
+    .pipeline-stage-default { background: #6c757d !important; color: #fff !important; }
+
+    .summary-value {
+        font-size: 1.3rem;
+        line-height: 1;
+        font-weight: 700;
+        color: #101828;
+    }
+
+    .summary-label {
+        margin-top: 4px;
+        color: #344054;
+        font-size: 0.82rem;
+    }
+
+    .summary-money {
+        color: #667085;
+        font-size: 0.78rem;
+        margin-top: 2px;
+    }
+
+    .pipeline-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .pipeline-filter-form {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+        flex: 1 1 auto;
+    }
+
+    .pipeline-filter-form .form-control,
+    .pipeline-filter-form .form-select {
+        min-width: 165px;
+        max-width: 230px;
+    }
+
+    .pipeline-view-toggle {
+        display: inline-flex;
+        gap: 8px;
+    }
+
+    .pipeline-card-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 14px;
+    }
+
+    .pipeline-deal-card {
+        position: relative;
+        border: 1px solid #e6e7e9;
+        border-radius: 7px;
+        background: #fff;
+        transition: box-shadow 0.15s, transform 0.15s;
+    }
+
+    .pipeline-deal-card:hover {
+        box-shadow: 0 8px 22px rgba(15, 23, 42, 0.1);
+        transform: translateY(-1px);
+    }
+
+    /* Raise the card above its neighbours while its stage menu is open so the
+       dropdown is not painted underneath the following cards. */
+    .pipeline-deal-card.stage-menu-open {
+        z-index: 30;
+    }
+
+    .pipeline-card-photo {
+        position: relative;
+        height: 150px;
+        background: #eef2f7;
+        border-top-left-radius: 7px;
+        border-top-right-radius: 7px;
+        overflow: hidden;
+    }
+
+    .pipeline-card-photo img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .pipeline-photo-trigger {
+        width: 100%;
+        height: 100%;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        cursor: zoom-in;
+        display: block;
+    }
+
+    .pipeline-photo-fallback {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #667085;
+        background: linear-gradient(135deg, #eef2f7, #dce5ef);
+    }
+
+    .pipeline-stage-badge {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        color: #fff;
         font-weight: 600;
-        padding: 2px 7px;
-        border-radius: 4px;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.16);
     }
-    .deal-age-badge.warning {
-        background: #fff3cd;
-        color: #856404;
+
+    .priority-star {
+        position: absolute;
+        top: 9px;
+        right: 9px;
+        width: 32px;
+        height: 32px;
+        border: 1px solid rgba(255,255,255,0.75);
+        border-radius: 50%;
+        background: rgba(15, 23, 42, 0.38);
+        color: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 2;
     }
-    .deal-age-badge.warning::before {
-        content: '\26A0';
-        font-size: 0.65rem;
+
+    .priority-star.is-priority {
+        background: #f59f00;
+        border-color: #f59f00;
+        color: #fff;
     }
-    .deal-age-badge.critical {
-        background: #f8d7da;
-        color: #842029;
+
+    .pipeline-card-body {
+        padding: 12px;
     }
-    .deal-age-badge.critical::before {
-        content: '\1F534';
-        font-size: 0.55rem;
+
+    .pipeline-card-title-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 2px;
     }
-    [data-bs-theme="dark"] .deal-age-badge.warning {
-        background: #332701;
-        color: #f59f00;
+
+    .pipeline-card-title {
+        color: #101828;
+        font-weight: 700;
+        line-height: 1.25;
+        text-decoration: none;
     }
-    [data-bs-theme="dark"] .deal-age-badge.critical {
-        background: #2c0b0e;
-        color: #e35d6a;
+
+    .pipeline-card-title:hover {
+        color: #206bc4;
+        text-decoration: none;
+    }
+
+    .pipeline-card-price {
+        color: #101828;
+        font-weight: 700;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .pipeline-card-address {
+        color: #475467;
+        font-size: 0.82rem;
+        margin-bottom: 12px;
+    }
+
+    .pipeline-number-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0;
+        border-top: 1px solid #edf0f3;
+        border-bottom: 1px solid #edf0f3;
+        margin-bottom: 12px;
+    }
+
+    .pipeline-number {
+        padding: 9px 8px;
+        border-right: 1px solid #edf0f3;
+        min-width: 0;
+    }
+
+    .pipeline-number:last-child {
+        border-right: 0;
+    }
+
+    .pipeline-number-label,
+    .pipeline-meta-label {
+        color: #667085;
+        font-size: 0.7rem;
+        line-height: 1.2;
+        margin-bottom: 4px;
+    }
+
+    .pipeline-number-value,
+    .pipeline-meta-value {
+        color: #101828;
+        font-size: 0.82rem;
+        font-weight: 700;
+        overflow-wrap: anywhere;
+    }
+
+    .pipeline-number-value.mao {
+        color: #087f5b;
+    }
+
+    .pipeline-meta-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+
+    .pipeline-card-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        color: #475467;
+        font-size: 0.78rem;
+        border-top: 1px solid #edf0f3;
+        padding-top: 10px;
+    }
+
+    .pipeline-list-card {
+        border: 1px solid #e6e7e9;
+        border-radius: 7px;
+        background: #fff;
+        overflow: hidden;
+    }
+
+    .pipeline-table {
+        margin-bottom: 0;
+        min-width: 980px;
+    }
+
+    .pipeline-table th {
+        color: #667085;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0;
+    }
+
+    .pipeline-empty {
+        border: 1px dashed #cfd7df;
+        border-radius: 7px;
+        padding: 30px;
+        text-align: center;
+        color: #667085;
+        background: #fff;
+    }
+
+    .pipeline-lightbox-modal .modal-dialog {
+        max-width: 100vw;
+        margin: 0;
+        height: 100vh;
+    }
+
+    .pipeline-lightbox-modal .modal-content {
+        min-height: 100vh;
+        border: 0;
+        border-radius: 0;
+        background: rgba(4, 12, 24, 0.96);
+        color: #fff;
+    }
+
+    .pipeline-lightbox-body {
+        min-height: calc(100vh - 64px);
+        display: grid;
+        grid-template-columns: 56px minmax(0, 1fr) 56px;
+        align-items: center;
+        gap: 12px;
+        padding: 16px;
+    }
+
+    .pipeline-lightbox-image-wrap {
+        height: calc(100vh - 150px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    #pipeline-lightbox-image {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+        border-radius: 6px;
+    }
+
+    .pipeline-lightbox-nav {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        border: 1px solid rgba(255,255,255,0.35);
+        background: rgba(255,255,255,0.12);
+        color: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .pipeline-lightbox-caption {
+        min-height: 44px;
+        color: rgba(255,255,255,0.78);
+        text-align: center;
+        padding: 0 16px 18px;
+    }
+
+    @media (max-width: 1200px) {
+        .pipeline-summary-grid {
+            grid-template-columns: repeat(3, minmax(150px, 1fr));
+        }
+    }
+
+    @media (max-width: 768px) {
+        .pipeline-header {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .pipeline-header .btn {
+            width: 100%;
+        }
+
+        .pipeline-summary-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .pipeline-filter-form,
+        .pipeline-filter-form .form-control,
+        .pipeline-filter-form .form-select,
+        .pipeline-view-toggle,
+        .pipeline-view-toggle .btn {
+            width: 100%;
+            max-width: none;
+        }
+
+        .pipeline-view-toggle {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+        }
+    }
+
+    @media (max-width: 560px) {
+        .pipeline-summary-grid,
+        .pipeline-card-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .pipeline-lightbox-body {
+            grid-template-columns: 42px minmax(0, 1fr) 42px;
+            gap: 6px;
+            padding: 10px;
+        }
+
+        .pipeline-lightbox-nav {
+            width: 38px;
+            height: 38px;
+        }
     }
 </style>
 @endpush
 
 @section('content')
-{{-- Filters --}}
-<div class="pipeline-filters">
-    <div class="input-icon" style="max-width: 220px;">
-        <span class="input-icon-addon">
-            <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><circle cx="10" cy="10" r="7"/><line x1="21" y1="21" x2="15" y2="15"/></svg>
-        </span>
-        <label for="pipeline-search" class="visually-hidden">{{ __('Search deals') }}</label>
-        <input type="text" id="pipeline-search" class="form-control" placeholder="{{ __('Search deals...') }}" value="{{ request('search') }}">
+<div class="pipeline-shell">
+    <div class="pipeline-header">
+        <div>
+            <h1 class="pipeline-title">{{ __('Pipeline') }}</h1>
+            <p class="pipeline-subtitle">{{ __('Track and manage your deals') }}</p>
+        </div>
+        <a href="{{ route('leads.create') }}" class="btn btn-primary" data-testid="pipeline-add-deal">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="20" height="20" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            {{ __('Add Deal') }}
+        </a>
     </div>
-    @if(auth()->user()->isAdmin() && $agents->count() > 1)
-    <label for="pipeline-agent-filter" class="visually-hidden">{{ __('Filter by agent') }}</label>
-    <select id="pipeline-agent-filter" class="form-select">
-        <option value="">{{ __('All Agents') }}</option>
-        @foreach($agents as $agent)
-            <option value="{{ $agent->id }}" {{ request('agent') == $agent->id ? 'selected' : '' }}>{{ $agent->name }}</option>
-        @endforeach
-    </select>
-    @endif
-    <a href="{{ route('deals.export', request()->query()) }}" class="btn btn-outline-secondary btn-sm ms-auto">
-        <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/><polyline points="7 11 12 16 17 11"/><line x1="12" y1="4" x2="12" y2="16"/></svg>
-        {{ __('Export CSV') }}
-    </a>
-    <div class="text-secondary" style="font-size: 0.8rem;">
-        @php $totalDeals = collect($deals)->flatten()->count(); @endphp
-        {{ $totalDeals }} {{ Str::plural('deal', $totalDeals) }} {{ __('in pipeline') }}
+
+    <div class="pipeline-summary-grid" data-testid="pipeline-summary-bar">
+        <div class="pipeline-summary-card">
+            <span class="summary-icon pipeline-stage-total">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="22" height="22" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0"/><path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2"/></svg>
+            </span>
+            <div>
+                <div class="summary-value">{{ $summary['total'] }}</div>
+                <div class="summary-label">{{ __('Total Deals') }}</div>
+            </div>
+        </div>
+        <div class="pipeline-summary-card">
+            <span class="summary-icon {{ $stageColors['under_contract'] }}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="22" height="22" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="M9 11l3 3l8 -8"/><path d="M20 12v6a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h9"/></svg>
+            </span>
+            <div>
+                <div class="summary-value">{{ $summary['under_contract'] }}</div>
+                <div class="summary-label">{{ __('Under Contract') }}</div>
+                <div class="summary-money">{{ $formatMoney($summary['under_contract_value']) }}</div>
+            </div>
+        </div>
+        <div class="pipeline-summary-card">
+            <span class="summary-icon {{ $stageColors[$summary['mid_stage_key']] ?? $fallbackStageColor }}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="22" height="22" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="M10 10m-7 0a7 7 0 1 0 14 0a7 7 0 1 0 -14 0"/><path d="M21 21l-6 -6"/></svg>
+            </span>
+            <div>
+                <div class="summary-value">{{ $summary['mid_stage'] }}</div>
+                <div class="summary-label">{{ $summary['mid_stage_label'] }}</div>
+                <div class="summary-money">{{ $formatMoney($summary['mid_stage_value']) }}</div>
+            </div>
+        </div>
+        <div class="pipeline-summary-card">
+            <span class="summary-icon {{ $stageColors['closing'] }}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="22" height="22" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="M12 8v4l3 3"/><path d="M3.05 11a9 9 0 1 1 .5 4"/></svg>
+            </span>
+            <div>
+                <div class="summary-value">{{ $summary['closing'] }}</div>
+                <div class="summary-label">{{ __('Closing') }}</div>
+                <div class="summary-money">{{ $formatMoney($summary['closing_value']) }}</div>
+            </div>
+        </div>
+        <div class="pipeline-summary-card">
+            <span class="summary-icon {{ $stageColors['closed_won'] }}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="22" height="22" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="M12 3l8 4.5v9l-8 4.5l-8 -4.5v-9z"/><path d="M12 12l8 -4.5"/><path d="M12 12v9"/><path d="M12 12l-8 -4.5"/></svg>
+            </span>
+            <div>
+                <div class="summary-value">{{ $summary['closed'] }}</div>
+                <div class="summary-label">{{ __('Closed') }}</div>
+                <div class="summary-money">{{ $formatMoney($summary['closed_value']) }}</div>
+            </div>
+        </div>
     </div>
-</div>
 
-<x-saved-views-bar entity-type="deals" />
+    <div class="pipeline-toolbar">
+        <form method="GET" action="{{ route('pipeline') }}" class="pipeline-filter-form" data-testid="pipeline-filter-form">
+            <input type="hidden" name="view" value="{{ $viewMode }}">
+            <label for="pipeline-stage-filter" class="visually-hidden">{{ __('Stage') }}</label>
+            <select id="pipeline-stage-filter" name="stage" class="form-select" data-testid="pipeline-stage-filter" onchange="this.form.submit()">
+                <option value="">{{ __('All Stages') }}</option>
+                @foreach($pipelineStageLabels as $stageKey => $stageLabel)
+                    <option value="{{ $stageKey }}" @selected(request('stage') === $stageKey)>{{ $stageLabel }}</option>
+                @endforeach
+            </select>
 
-{{-- Accordion Pipeline --}}
-<div id="pipeline">
-    @foreach($stages as $stageKey => $stageLabel)
-    @php
-        $stageDeals = $deals[$stageKey] ?? collect();
-        $stageTotal = $stageDeals->sum('contract_price');
-        $stageFees = $stageDeals->sum($businessMode === 'realestate' ? 'total_commission' : 'assignment_fee');
-    @endphp
-    <div class="stage-row" data-stage="{{ $stageKey }}">
-        <div class="stage-header">
-            <svg class="stage-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><polyline points="9 6 15 12 9 18"/></svg>
-            <span class="stage-name">{{ $stageLabel }}</span>
-            <div class="stage-stats">
-                @if($stageTotal > 0)
-                    <span>{{ Fmt::currency($stageTotal, 0) }}</span>
-                @endif
-                @if($stageFees > 0)
-                    <span class="text-success">{{ Fmt::currency($stageFees, 0) }} {{ $modeTerms['fee_label'] }}</span>
-                @endif
-                <span class="badge bg-secondary-lt">{{ $stageDeals->count() }}</span>
-                @php
-                    $staleDealCount = $stageDeals->filter(function($d) {
-                        return $d->stage_changed_at && (int) now()->diffInDays($d->stage_changed_at, true) > 5;
-                    })->count();
-                @endphp
-                @if($staleDealCount > 0)
-                <span class="badge bg-{{ $staleDealCount > 3 ? 'red' : 'yellow' }}-lt" title="{{ __(':count deal(s) need attention', ['count' => $staleDealCount]) }}">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-sm" width="14" height="14" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 9v2m0 4v.01"/><path d="M5 19h14a2 2 0 001.84-2.75l-7.1-12.25a2 2 0 00-3.5 0l-7.1 12.25a2 2 0 001.75 2.75"/></svg>
-                    {{ $staleDealCount }}
+            <label for="pipeline-deal-type-filter" class="visually-hidden">{{ __('Deal Type') }}</label>
+            <select id="pipeline-deal-type-filter" name="deal_type" class="form-select" data-testid="pipeline-deal-type-filter" onchange="this.form.submit()">
+                <option value="">{{ __('All Deal Types') }}</option>
+                @foreach($dealTypes as $typeKey => $typeLabel)
+                    <option value="{{ $typeKey }}" @selected(request('deal_type') === $typeKey)>{{ $typeLabel }}</option>
+                @endforeach
+            </select>
+
+            <label for="pipeline-lender-filter" class="visually-hidden">{{ __('Lender') }}</label>
+            <select id="pipeline-lender-filter" name="lender" class="form-select" data-testid="pipeline-lender-filter" onchange="this.form.submit()">
+                <option value="">{{ __('All Lenders') }}</option>
+                @foreach($lenders as $lender)
+                    <option value="{{ $lender->id }}" @selected((string) request('lender') === (string) $lender->id)>{{ $lender->company ?: $lender->name }}</option>
+                @endforeach
+            </select>
+
+            <div class="input-icon">
+                <span class="input-icon-addon">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="20" height="20" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="M10 10m-7 0a7 7 0 1 0 14 0a7 7 0 1 0 -14 0"/><path d="M21 21l-6 -6"/></svg>
                 </span>
-                @endif
+                <label for="pipeline-search" class="visually-hidden">{{ __('Search') }}</label>
+                <input id="pipeline-search" type="search" name="search" class="form-control" placeholder="{{ __('Search address, seller, deal...') }}" value="{{ request('search') }}" data-testid="pipeline-search">
             </div>
+
+            <button type="submit" class="btn btn-outline-primary">{{ __('Search') }}</button>
+            @if(request()->hasAny(['stage', 'deal_type', 'lender', 'search']))
+                <a href="{{ route('pipeline', ['view' => $viewMode]) }}" class="btn btn-ghost-secondary">{{ __('Clear') }}</a>
+            @endif
+        </form>
+
+        <div class="pipeline-view-toggle" data-testid="pipeline-view-toggle">
+            <a href="{{ $buildViewUrl('card') }}" class="btn {{ $viewMode === 'card' ? 'btn-primary' : 'btn-outline-secondary' }}" data-testid="pipeline-card-view">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="18" height="18" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="M4 4h6v6h-6z"/><path d="M14 4h6v6h-6z"/><path d="M4 14h6v6h-6z"/><path d="M14 14h6v6h-6z"/></svg>
+                {{ __('Card View') }}
+            </a>
+            <a href="{{ $buildViewUrl('list') }}" class="btn {{ $viewMode === 'list' ? 'btn-primary' : 'btn-outline-secondary' }}" data-testid="pipeline-list-view">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="18" height="18" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="M9 6h11"/><path d="M9 12h11"/><path d="M9 18h11"/><path d="M5 6h.01"/><path d="M5 12h.01"/><path d="M5 18h.01"/></svg>
+                {{ __('List View') }}
+            </a>
         </div>
-        <div class="stage-cards">
-            <div class="stage-cards-grid" data-stage="{{ $stageKey }}">
-                @forelse($stageDeals as $deal)
-                @php $daysInStage = $deal->stage_changed_at ? (int) now()->diffInDays($deal->stage_changed_at, true) : 0; @endphp
-                <div class="deal-card {{ $daysInStage > 10 ? 'deal-age-critical' : ($daysInStage > 5 ? 'deal-age-warning' : '') }}" data-deal-id="{{ $deal->id }}">
-                    <button class="btn btn-ghost-secondary btn-icon btn-sm quick-edit-btn" data-deal-id="{{ $deal->id }}" title="{{ __('Quick Edit') }}">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-sm" width="16" height="16" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M7 7h-1a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-1"/><path d="M20.385 6.585a2.1 2.1 0 0 0-2.97-2.97l-8.415 8.385v3h3l8.385-8.415z"/><path d="M16 5l3 3"/></svg>
-                    </button>
-                    <div class="deal-card-drag" draggable="true" title="{{ __('Drag to move stage') }}">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><circle cx="9" cy="5" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="19" r="1"/></svg>
-                    </div>
-                    <div class="deal-card-body" data-deal-id="{{ $deal->id }}">
-                        <div class="deal-card-title">{{ $deal->lead->full_name ?? $deal->title }}</div>
-                        <div class="deal-card-meta">
-                            @if($deal->lead && $deal->lead->property)
-                                {{ $deal->lead->property->address ?? '' }}<br>
-                            @endif
-                            @if($deal->contract_price)
-                                {{ __('Contract:') }} <span data-field="contract_price" data-raw-value="{{ $deal->contract_price }}">{{ Fmt::currency($deal->contract_price, 0) }}</span>
-                            @endif
-                            @if($businessMode === 'wholesale' && $deal->assignment_fee)
-                                &middot; {{ __('Fee:') }} <span data-field="assignment_fee" data-raw-value="{{ $deal->assignment_fee }}">{{ Fmt::currency($deal->assignment_fee, 0) }}</span>
-                            @elseif($businessMode === 'realestate' && $deal->total_commission)
-                                &middot; {{ __('Comm:') }} <span data-field="total_commission" data-raw-value="{{ $deal->total_commission }}">{{ Fmt::currency($deal->total_commission, 0) }}</span>
-                            @endif
-                            @if($deal->contract_price || ($businessMode === 'wholesale' ? $deal->assignment_fee : $deal->total_commission))<br>@endif
-                            @if($deal->stage === 'under_contract' && $deal->due_diligence_end_date)
-                                <span class="badge {{ $deal->is_due_diligence_urgent ? 'bg-red-lt' : 'bg-cyan-lt' }} mt-1" style="color:#fff;">
-                                    {{ __('DD:') }} {{ $deal->due_diligence_days_remaining }}{{ __('d left') }}
-                                </span><br>
-                            @endif
-                            <span>{{ $deal->agent->name ?? '' }}</span>
-                            &middot; <span class="deal-age-badge {{ $daysInStage > 10 ? 'critical' : ($daysInStage > 5 ? 'warning' : '') }}">{{ $daysInStage }}{{ __('d in stage') }}</span>
-                        </div>
-                    </div>
-                    <div class="dropdown move-dropdown">
-                        <button class="btn btn-sm btn-ghost-secondary btn-icon" data-bs-toggle="dropdown" aria-label="{{ __('Move to') }}">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M5 12h14"/><path d="M15 16l4 -4"/><path d="M15 8l4 4"/></svg>
-                            <span class="visually-hidden">{{ __('Move to') }}</span>
+    </div>
+
+    @if($deals->isEmpty())
+        <div class="pipeline-empty" data-testid="pipeline-empty">{{ __('No deals match the selected filters.') }}</div>
+    @elseif($viewMode === 'list')
+        <div class="pipeline-list-card table-responsive" data-testid="pipeline-list-results">
+            <table class="table table-vcenter pipeline-table">
+                <thead>
+                    <tr>
+                        <th>{{ __('Priority') }}</th>
+                        <th>{{ __('Property') }}</th>
+                        <th>{{ __('Stage') }}</th>
+                        <th>{{ __('Asking') }}</th>
+                        <th>{{ __('Contract') }}</th>
+                        <th>{{ __('ARV') }}</th>
+                        <th>{{ __('Max Offer / MAO') }}</th>
+                        <th>{{ __('Lender') }}</th>
+                        <th>{{ __('Deal Type') }}</th>
+                        <th>{{ __('Days in Stage') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($deals as $deal)
+                        @php
+                            $property = $deal->lead?->property;
+                            $daysInStage = $deal->stage_changed_at ? (int) now()->diffInDays($deal->stage_changed_at, true) : 0;
+                            $stageColor = $stageColors[$deal->stage] ?? $fallbackStageColor;
+                            $lenderName = $deal->lenders->first()?->lender?->company ?: $deal->lenders->first()?->lender?->name;
+                        @endphp
+                        <tr data-testid="pipeline-list-row">
+                            <td>
+                                <button type="button" class="priority-star position-static {{ $deal->is_priority ? 'is-priority' : '' }}" data-deal-id="{{ $deal->id }}" data-priority-url="{{ route('deals.togglePriority', $deal) }}" aria-label="{{ __('Toggle priority') }}">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="17" height="17" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="{{ $deal->is_priority ? 'currentColor' : 'none' }}"><path d="M12 17.75l-6.172 3.245l1.179 -6.873l-4.993 -4.867l6.9 -1.002l3.086 -6.253l3.086 6.253l6.9 1.002l-4.993 4.867l1.179 6.873z"/></svg>
+                                </button>
+                            </td>
+                            <td>
+                                <a href="{{ route('deals.show', $deal) }}" class="fw-bold text-reset" title="{{ $deal->title }}">{{ $property?->address ?? $deal->lead?->full_name ?? $deal->title }}</a>
+                                <div class="text-secondary small">{{ trim(($property?->city ? $property->city . ', ' : '') . ($property?->state ?? '') . ' ' . ($property?->zip_code ?? '')) }}</div>
+                            </td>
+                            <td>
+                                <div class="dropdown">
+                                    <a href="#" class="badge {{ $stageColor }} text-decoration-none" data-bs-toggle="dropdown" title="{{ __('Move to stage') }}">{{ $pipelineStageLabels[$deal->stage] ?? $deal->stage }}</a>
+                                    <div class="dropdown-menu">
+                                        <span class="dropdown-header">{{ __('Move to stage') }}</span>
+                                        @foreach($pipelineStageLabels as $moveStageKey => $moveStageLabel)
+                                            @if($moveStageKey !== $deal->stage)
+                                                <a href="#" class="dropdown-item move-stage-btn" data-stage="{{ $moveStageKey }}" data-stage-url="{{ route('deals.updateStage', $deal) }}">{{ $moveStageLabel }}</a>
+                                            @endif
+                                        @endforeach
+                                    </div>
+                                </div>
+                            </td>
+                            <td>{{ $formatMoney($property?->asking_price) }}</td>
+                            <td>{{ $formatMoney($deal->contract_price) }}</td>
+                            <td>{{ $formatMoney($property?->after_repair_value) }}</td>
+                            <td class="text-success fw-bold">{{ $formatMoney($property?->mao ?? $property?->maximum_allowable_offer) }}</td>
+                            <td>{{ $lenderName ?: '-' }}</td>
+                            <td>{{ $deal->deal_type_label }}</td>
+                            <td>{{ $daysInStage }} {{ __('days') }}</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    @else
+        <div class="pipeline-card-grid" data-testid="pipeline-card-results">
+            @foreach($deals as $deal)
+                @php
+                    $property = $deal->lead?->property;
+                    $photos = $deal->lead?->photos?->sortBy('created_at')->values() ?? collect();
+                    $photo = $photos->first();
+                    $galleryPhotos = $photos->map(fn ($photo) => [
+                        'url' => $photo->url,
+                        'caption' => $photo->caption ?: $photo->original_name,
+                    ])->values();
+                    $daysInStage = $deal->stage_changed_at ? (int) now()->diffInDays($deal->stage_changed_at, true) : 0;
+                    $stageColor = $stageColors[$deal->stage] ?? $fallbackStageColor;
+                    $lenderName = $deal->lenders->first()?->lender?->company ?: $deal->lenders->first()?->lender?->name;
+                    $displayDateLabel = $deal->stage === 'closed_won' ? __('Closed') : ($deal->contract_date ? __('Contract') : __('Added'));
+                    $displayDate = $deal->stage === 'closed_won'
+                        ? ($deal->closing_date ?: $deal->stage_changed_at)
+                        : ($deal->contract_date ?: $deal->created_at);
+                @endphp
+                <article class="pipeline-deal-card" data-testid="pipeline-deal-card" data-deal-id="{{ $deal->id }}">
+                    <div class="pipeline-card-photo">
+                        @if($photo)
+                            <button type="button" class="pipeline-photo-trigger" data-testid="pipeline-photo-trigger" data-gallery="{{ base64_encode($galleryPhotos->toJson()) }}" data-start-index="0" aria-label="{{ __('Open photo gallery') }}">
+                                <img src="{{ $photo->thumbnail_url }}" alt="{{ $photo->caption ?: $photo->original_name }}">
+                            </button>
+                        @else
+                            <div class="pipeline-photo-fallback" data-testid="pipeline-photo-fallback">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="42" height="42" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor" fill="none"><path d="M3 21h18"/><path d="M5 21v-14l8 -4v18"/><path d="M19 21v-10l-6 -4"/><path d="M9 9v.01"/><path d="M9 12v.01"/><path d="M9 15v.01"/></svg>
+                            </div>
+                        @endif
+                        <span class="badge {{ $stageColor }} pipeline-stage-badge" data-testid="pipeline-stage-badge">{{ $pipelineStageLabels[$deal->stage] ?? $deal->stage }}</span>
+                        <button type="button" class="priority-star {{ $deal->is_priority ? 'is-priority' : '' }}" data-testid="pipeline-priority-star" data-deal-id="{{ $deal->id }}" data-priority-url="{{ route('deals.togglePriority', $deal) }}" aria-label="{{ __('Toggle priority') }}">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="17" height="17" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="{{ $deal->is_priority ? 'currentColor' : 'none' }}"><path d="M12 17.75l-6.172 3.245l1.179 -6.873l-4.993 -4.867l6.9 -1.002l3.086 -6.253l3.086 6.253l6.9 1.002l-4.993 4.867l1.179 6.873z"/></svg>
                         </button>
-                        <div class="dropdown-menu dropdown-menu-end">
-                            @foreach($stages as $moveStageKey => $moveStageLabel)
-                                @if($moveStageKey !== $stageKey)
-                                    <a href="#" class="dropdown-item move-deal-btn" data-deal-id="{{ $deal->id }}" data-stage="{{ $moveStageKey }}">{{ $moveStageLabel }}</a>
-                                @endif
-                            @endforeach
+                    </div>
+                    <div class="pipeline-card-body">
+                        <div class="pipeline-card-title-row">
+                            <div>
+                                <a href="{{ route('deals.show', $deal) }}" class="pipeline-card-title" title="{{ $deal->title }}">{{ $property?->address ?? $deal->lead?->full_name ?? $deal->title }}</a>
+                                <div class="pipeline-card-address">{{ trim(($property?->city ? $property->city . ', ' : '') . ($property?->state ?? '') . ' ' . ($property?->zip_code ?? '')) }}</div>
+                            </div>
+                            <div class="pipeline-card-price">
+                                {{ $formatMoney($property?->asking_price) }}
+                                <div class="pipeline-number-label">{{ __('Asking Price') }}</div>
+                            </div>
+                        </div>
+
+                        <div class="pipeline-number-grid">
+                            <div class="pipeline-number">
+                                <div class="pipeline-number-label">{{ __('Contract Price') }}</div>
+                                <div class="pipeline-number-value">{{ $formatMoney($deal->contract_price) }}</div>
+                            </div>
+                            <div class="pipeline-number">
+                                <div class="pipeline-number-label">{{ __('ARV') }}</div>
+                                <div class="pipeline-number-value">{{ $formatMoney($property?->after_repair_value) }}</div>
+                            </div>
+                            <div class="pipeline-number">
+                                <div class="pipeline-number-label">{{ __('Max Offer / MAO') }}</div>
+                                <div class="pipeline-number-value mao">{{ $formatMoney($property?->mao ?? $property?->maximum_allowable_offer) }}</div>
+                            </div>
+                        </div>
+
+                        <div class="pipeline-meta-grid">
+                            <div>
+                                <div class="pipeline-meta-label">{{ __('Lender') }}</div>
+                                <div class="pipeline-meta-value">{{ $lenderName ?: '-' }}</div>
+                            </div>
+                            <div>
+                                <div class="pipeline-meta-label">{{ __('Deal Type') }}</div>
+                                <div class="pipeline-meta-value">{{ $deal->deal_type_label }}</div>
+                            </div>
+                        </div>
+
+                        <div class="pipeline-card-footer">
+                            <span>{{ $displayDateLabel }}: {{ $displayDate ? Fmt::date($displayDate) : '-' }}</span>
+                            <span>{{ $daysInStage }} {{ __('Days in Stage') }}</span>
+                            <div class="dropdown">
+                                <button type="button" class="btn btn-sm btn-ghost-secondary btn-icon" data-bs-toggle="dropdown" aria-label="{{ __('Move to stage') }}" data-testid="pipeline-move-stage">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"/><path d="M12 19m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"/><path d="M12 5m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"/></svg>
+                                </button>
+                                <div class="dropdown-menu dropdown-menu-end">
+                                    <span class="dropdown-header">{{ __('Move to stage') }}</span>
+                                    @foreach($pipelineStageLabels as $moveStageKey => $moveStageLabel)
+                                        @if($moveStageKey !== $deal->stage)
+                                            <a href="#" class="dropdown-item move-stage-btn" data-stage="{{ $moveStageKey }}" data-stage-url="{{ route('deals.updateStage', $deal) }}">{{ $moveStageLabel }}</a>
+                                        @endif
+                                    @endforeach
+                                </div>
+                            </div>
                         </div>
                     </div>
+                </article>
+            @endforeach
+        </div>
+    @endif
+</div>
+
+<div class="modal fade pipeline-lightbox-modal" id="pipelinePhotoLightbox" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <div>
+                    <h5 class="modal-title">{{ __('Property Photos') }}</h5>
+                    <div class="text-white-50 small" id="pipeline-lightbox-counter"></div>
                 </div>
-                @empty
-                <div class="stage-empty">{{ __('No deals in this stage') }}</div>
-                @endforelse
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="{{ __('Close') }}"></button>
             </div>
+            <div class="pipeline-lightbox-body">
+                <button type="button" class="pipeline-lightbox-nav" id="pipeline-lightbox-prev" aria-label="{{ __('Previous photo') }}">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="26" height="26" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="M15 6l-6 6l6 6"/></svg>
+                </button>
+                <div class="pipeline-lightbox-image-wrap">
+                    <img src="" alt="" id="pipeline-lightbox-image">
+                </div>
+                <button type="button" class="pipeline-lightbox-nav" id="pipeline-lightbox-next" aria-label="{{ __('Next photo') }}">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="26" height="26" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="M9 6l6 6l-6 6"/></svg>
+                </button>
+            </div>
+            <div class="pipeline-lightbox-caption" id="pipeline-lightbox-caption"></div>
         </div>
     </div>
-    @endforeach
 </div>
-
-<!-- Slide-over Panel -->
-<div class="slide-over-backdrop" id="dealBackdrop"></div>
-<div class="slide-over" id="dealPanel">
-    <div class="d-flex justify-content-between mb-3">
-        <h3 id="panel-title">{{ ($businessMode ?? 'wholesale') === 'realestate' ? __('Transaction Details') : __('Deal Details') }}</h3>
-        <button class="btn btn-ghost-secondary btn-sm" id="panel-close" aria-label="{{ __('Close panel') }}">&times;</button>
-    </div>
-    <div id="panel-content">
-        <p class="text-secondary">{{ __('Loading...') }}</p>
-    </div>
-</div>
-
-<!-- Toast Container -->
-<div class="toast-container" id="toastContainer"></div>
+@endsection
 
 @push('scripts')
 <script>
-(function() {
-    const baseUrl = '{{ url("/pipeline") }}';
-    const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
-    let dragDealId = null;
-    let dragSourceStage = null;
-    let dragSourceRow = null;
+document.addEventListener('DOMContentLoaded', function () {
+    var csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    var galleryPhotos = [];
+    var galleryIndex = 0;
+    var lightboxEl = document.getElementById('pipelinePhotoLightbox');
+    var lightbox = lightboxEl && window.bootstrap ? new bootstrap.Modal(lightboxEl) : null;
+    var lightboxImage = document.getElementById('pipeline-lightbox-image');
+    var lightboxCaption = document.getElementById('pipeline-lightbox-caption');
+    var lightboxCounter = document.getElementById('pipeline-lightbox-counter');
+    var lightboxPrev = document.getElementById('pipeline-lightbox-prev');
+    var lightboxNext = document.getElementById('pipeline-lightbox-next');
 
-    // ── Toast ────────────────────────────────────────────
-    function showToast(message, type) {
-        const container = document.getElementById('toastContainer');
-        const toast = document.createElement('div');
-        toast.className = 'pipeline-toast ' + type;
-        toast.textContent = message;
-        container.appendChild(toast);
-        requestAnimationFrame(() => toast.classList.add('show'));
-        setTimeout(() => {
-            toast.classList.remove('show');
-            setTimeout(() => toast.remove(), 300);
-        }, 3000);
+    function renderLightboxPhoto() {
+        if (!galleryPhotos.length || !lightboxImage) return;
+
+        var photo = galleryPhotos[galleryIndex];
+        lightboxImage.src = photo.url || '';
+        lightboxImage.alt = photo.caption || '{{ __('Property photo') }}';
+        if (lightboxCaption) lightboxCaption.textContent = photo.caption || '';
+        if (lightboxCounter) lightboxCounter.textContent = (galleryIndex + 1) + ' / ' + galleryPhotos.length;
+        if (lightboxPrev) lightboxPrev.disabled = galleryPhotos.length <= 1;
+        if (lightboxNext) lightboxNext.disabled = galleryPhotos.length <= 1;
     }
 
-    // ── Accordion toggle ─────────────────────────────────
-    document.querySelectorAll('.stage-header').forEach(header => {
-        header.addEventListener('click', e => {
-            // Don't toggle if dropping
-            if (e.target.closest('.deal-card-drag')) return;
-            const row = header.closest('.stage-row');
-            const wasExpanded = row.classList.contains('expanded');
+    function moveLightbox(step) {
+        if (!galleryPhotos.length) return;
+        galleryIndex = (galleryIndex + step + galleryPhotos.length) % galleryPhotos.length;
+        renderLightboxPhoto();
+    }
 
-            // Collapse all
-            document.querySelectorAll('.stage-row.expanded').forEach(r => r.classList.remove('expanded'));
+    document.querySelectorAll('.pipeline-photo-trigger').forEach(function (button) {
+        button.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
 
-            // Toggle clicked
-            if (!wasExpanded) {
-                row.classList.add('expanded');
-                // Scroll into view if needed
-                row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            try {
+                galleryPhotos = JSON.parse(atob(button.dataset.gallery || 'W10='));
+            } catch (error) {
+                galleryPhotos = [];
             }
+
+            if (!galleryPhotos.length || !lightbox) return;
+
+            galleryIndex = parseInt(button.dataset.startIndex || '0', 10) || 0;
+            renderLightboxPhoto();
+            lightbox.show();
         });
     });
 
-    // Auto-expand first stage that has deals
-    const firstWithDeals = document.querySelector('.stage-row .stage-cards-grid .deal-card');
-    if (firstWithDeals) {
-        firstWithDeals.closest('.stage-row').classList.add('expanded');
+    if (lightboxPrev) {
+        lightboxPrev.addEventListener('click', function () { moveLightbox(-1); });
     }
 
-    // ── Drag & Drop ──────────────────────────────────────
-    document.querySelectorAll('.deal-card-drag').forEach(handle => {
-        handle.addEventListener('dragstart', e => {
-            const card = handle.closest('.deal-card');
-            const grid = card.closest('.stage-cards-grid');
-            dragDealId = card.dataset.dealId;
-            dragSourceStage = grid.dataset.stage;
-            dragSourceRow = card.closest('.stage-row');
-            e.dataTransfer.setData('text/plain', dragDealId);
-            e.dataTransfer.effectAllowed = 'move';
-            requestAnimationFrame(() => card.classList.add('dragging'));
+    if (lightboxNext) {
+        lightboxNext.addEventListener('click', function () { moveLightbox(1); });
+    }
+
+    if (lightboxEl) {
+        lightboxEl.addEventListener('keydown', function (event) {
+            if (event.key === 'ArrowLeft') moveLightbox(-1);
+            if (event.key === 'ArrowRight') moveLightbox(1);
         });
+    }
 
-        handle.addEventListener('dragend', () => {
-            const card = handle.closest('.deal-card');
-            card.classList.remove('dragging');
-            document.querySelectorAll('.stage-row.drag-over').forEach(r => r.classList.remove('drag-over'));
-            dragDealId = null;
-            dragSourceStage = null;
-            dragSourceRow = null;
-        });
-    });
+    document.querySelectorAll('.priority-star').forEach(function (button) {
+        button.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
 
-    // Each stage row is a drop target
-    document.querySelectorAll('.stage-row').forEach(row => {
-        const stage = row.dataset.stage;
+            var url = button.dataset.priorityUrl;
+            if (!url) return;
 
-        row.addEventListener('dragover', e => {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-            if (stage !== dragSourceStage && !row.classList.contains('drag-over')) {
-                row.classList.add('drag-over');
-            }
-        });
-
-        row.addEventListener('dragleave', e => {
-            if (!row.contains(e.relatedTarget)) {
-                row.classList.remove('drag-over');
-            }
-        });
-
-        row.addEventListener('drop', e => {
-            e.preventDefault();
-            e.stopPropagation();
-            row.classList.remove('drag-over');
-
-            const dealId = e.dataTransfer.getData('text/plain');
-            if (!dealId || stage === dragSourceStage) return;
-
-            // Optimistic UI: move card
-            const card = document.querySelector(`.deal-card[data-deal-id="${dealId}"]`);
-            if (!card) return;
-
-            const sourceGrid = document.querySelector(`.stage-cards-grid[data-stage="${dragSourceStage}"]`);
-            const targetGrid = row.querySelector('.stage-cards-grid');
-
-            // Remove empty message from target if present
-            const emptyMsg = targetGrid.querySelector('.stage-empty');
-            if (emptyMsg) emptyMsg.remove();
-
-            targetGrid.appendChild(card);
-            card.classList.remove('dragging');
-
-            // Add empty message to source if now empty
-            if (!sourceGrid.querySelector('.deal-card')) {
-                sourceGrid.innerHTML = '<div class="stage-empty">{{ __('No deals in this stage') }}</div>';
-            }
-
-            updateStageStats();
-
-            // AJAX
-            fetch(baseUrl + '/' + dealId + '/stage', {
+            button.disabled = true;
+            fetch(url, {
                 method: 'PATCH',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken,
+                    'X-CSRF-TOKEN': csrf,
                     'Accept': 'application/json',
+                    'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ stage: stage })
-            }).then(r => {
-                if (!r.ok) throw new Error('Failed');
-                return r.json();
-            }).then(data => {
-                if (data.success) {
-                    showToast('{{ ($businessMode ?? "wholesale") === "realestate" ? __("Transaction moved to") : __("Deal moved to") }} ' + row.querySelector('.stage-name').textContent, 'success');
-                } else {
-                    throw new Error('Failed');
-                }
-            }).catch(() => {
-                // Revert
-                showToast('{{ __('Failed to move deal. Please try again.') }}', 'error');
-                targetGrid.querySelector('.stage-empty')?.remove();
-                sourceGrid.querySelector('.stage-empty')?.remove();
-                sourceGrid.appendChild(card);
-                if (!targetGrid.querySelector('.deal-card')) {
-                    targetGrid.innerHTML = '<div class="stage-empty">{{ __('No deals in this stage') }}</div>';
-                }
-                updateStageStats();
-            });
-        });
-    });
-
-    // ── Update badges/stats after move ───────────────────
-    function updateStageStats() {
-        document.querySelectorAll('.stage-row').forEach(row => {
-            const count = row.querySelectorAll('.deal-card').length;
-            const badge = row.querySelector('.stage-stats .badge');
-            if (badge) badge.textContent = count;
-        });
-        const totalCount = document.querySelectorAll('.deal-card').length;
-        const totalEl = document.querySelector('.pipeline-filters .ms-auto');
-        if (totalEl) totalEl.textContent = totalCount + ' ' + (totalCount !== 1 ? '{{ __('deals') }}' : '{{ __('deal') }}') + ' {{ __('in pipeline') }}';
-    }
-
-    // ── Card click → slide-over ──────────────────────────
-    document.addEventListener('click', e => {
-        const body = e.target.closest('.deal-card-body');
-        if (body) {
-            e.stopPropagation();
-            openDealPanel(body.dataset.dealId);
-        }
-    });
-
-    document.getElementById('dealBackdrop').addEventListener('click', closeDealPanel);
-    document.getElementById('panel-close').addEventListener('click', closeDealPanel);
-
-    function openDealPanel(dealId) {
-        document.getElementById('dealBackdrop').classList.add('open');
-        document.getElementById('dealPanel').classList.add('open');
-        document.getElementById('panel-content').innerHTML = '<p class="text-secondary">{{ __('Loading...') }}</p>';
-
-        fetch(baseUrl + '/' + dealId, {
-            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
-        }).then(r => r.json()).then(deal => {
-            document.getElementById('panel-title').innerHTML = deal.title + ' <a href="{{ url("/pipeline") }}/' + deal.id + '" class="btn btn-outline-primary btn-sm ms-2" title="{{ __('View Full Deal') }}"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 6h-6a2 2 0 0 0 -2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-6"/><path d="M11 13l9 -9"/><path d="M15 4h5v5"/></svg> {{ __('Open') }}</a>';
-            let html = `
-                <form id="deal-edit-form" data-deal-id="${deal.id}">
-                    <div class="mb-3">
-                        <label class="form-label">{{ __('Stage') }}</label>
-                        <div><span class="badge bg-primary">${deal.stage.replace(/_/g, ' ')}</span></div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">{{ __('Lead') }}</label>
-                        <div>${deal.lead ? deal.lead.first_name + ' ' + deal.lead.last_name : '-'}</div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">{{ __('Property') }}</label>
-                        <div>${deal.lead && deal.lead.property ? deal.lead.property.address : '-'}</div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">{{ __('Agent') }}</label>
-                        <div>${deal.agent ? deal.agent.name : '-'}</div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">{{ __('Contract Price ($)') }}</label>
-                        <input type="number" name="contract_price" class="form-control" step="0.01" value="${deal.contract_price || ''}">
-                    </div>
-                    @if($businessMode === 'wholesale')
-                    <div class="mb-3">
-                        <label class="form-label">{{ __('Assignment Fee ($)') }}</label>
-                        <input type="number" name="assignment_fee" class="form-control" step="0.01" value="${deal.assignment_fee || ''}">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">{{ __('Earnest Money ($)') }}</label>
-                        <input type="number" name="earnest_money" class="form-control" step="0.01" value="${deal.earnest_money || ''}">
-                    </div>
-                    @else
-                    <div class="mb-3">
-                        <label class="form-label">{{ __('Listing Commission (%)') }}</label>
-                        <input type="number" name="listing_commission_pct" class="form-control" step="0.01" min="0" max="100" value="${deal.listing_commission_pct || ''}">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">{{ __('Buyer Commission (%)') }}</label>
-                        <input type="number" name="buyer_commission_pct" class="form-control" step="0.01" min="0" max="100" value="${deal.buyer_commission_pct || ''}">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">{{ __('Total Commission ($)') }}</label>
-                        <input type="number" name="total_commission" class="form-control" step="0.01" value="${deal.total_commission || ''}">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">{{ __('MLS #') }}</label>
-                        <input type="text" name="mls_number" class="form-control" maxlength="30" value="${deal.mls_number || ''}">
-                    </div>
-                    @endif
-                    <div class="row mb-3">
-                        <div class="col-6">
-                            <label class="form-label">{{ __('Contract Date') }}</label>
-                            <input type="date" name="contract_date" class="form-control" value="${deal.contract_date ? deal.contract_date.split('T')[0] : ''}">
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label">{{ __('Closing Date') }}</label>
-                            <input type="date" name="closing_date" class="form-control" value="${deal.closing_date ? deal.closing_date.split('T')[0] : ''}">
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">{{ __('Inspection Period (days)') }}</label>
-                        <input type="number" name="inspection_period_days" class="form-control" min="0" value="${deal.inspection_period_days || ''}">
-                    </div>
-                    ${deal.due_diligence_end_date ? `<div class="alert ${deal.is_due_diligence_urgent ? 'alert-danger' : 'alert-info'} mb-3"><strong>{{ __('Due Diligence:') }}</strong> {{ __('Ends') }} ${new Date(deal.due_diligence_end_date).toLocaleDateString()} (${deal.due_diligence_days_remaining ?? '?'} {{ __('days left') }})</div>` : ''}
-                    <div class="mb-3">
-                        <label class="form-label">{{ __('Notes') }}</label>
-                        <textarea name="notes" class="form-control" rows="3">${deal.notes || ''}</textarea>
-                    </div>
-                    <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-primary flex-fill" id="panel-save-btn">{{ __('Save Changes') }}</button>
-                        @if(auth()->user()->tenant->ai_enabled)
-                        <button type="button" class="btn btn-outline-purple" onclick="aiAnalyzeDeal(${deal.id})" title="{{ __('AI Deal Analysis') }}">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-sparkles" width="18" height="18" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2zm0 -12a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2zm-7 12a6 6 0 0 1 6 -6a6 6 0 0 1 -6 -6a6 6 0 0 1 -6 6a6 6 0 0 1 6 6z"/></svg>
-                            {{ __('AI Analyze') }}
-                        </button>
-                        <button type="button" class="btn btn-outline-info" onclick="aiStageAdvice(${deal.id})" title="{{ __('AI Stage Advisor') }}">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-sparkles" width="18" height="18" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2zm0 -12a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2zm-7 12a6 6 0 0 1 6 -6a6 6 0 0 1 -6 -6a6 6 0 0 1 -6 6a6 6 0 0 1 6 6z"/></svg>
-                            {{ __('Stage Advisor') }}
-                        </button>
-                        @endif
-                    </div>
-                </form>
-                <hr>
-                <h4>{{ __('Documents') }}</h4>
-                <form action="{{ url('/pipeline') }}/${deal.id}/documents" method="POST" enctype="multipart/form-data" class="mb-3">
-                    <input type="hidden" name="_token" value="${csrfToken}">
-                    <div class="input-group">
-                        <input type="file" name="document" class="form-control form-control-sm" accept=".pdf,.jpg,.jpeg,.png">
-                        <button type="submit" class="btn btn-sm btn-outline-primary">{{ __('Upload') }}</button>
-                    </div>
-                    <small class="text-secondary">{{ __('PDF, JPG, PNG. Max 10MB.') }}</small>
-                </form>
-            `;
-
-            if (deal.documents && deal.documents.length) {
-                html += '<div class="list-group list-group-flush">';
-                deal.documents.forEach(doc => {
-                    html += `<a href="{{ url('/pipeline/documents') }}/${doc.id}/download" class="list-group-item list-group-item-action">${doc.original_name} <small class="text-secondary">(${(doc.size / 1024).toFixed(1)} KB)</small></a>`;
-                });
-                html += '</div>';
-            } else {
-                html += '<p class="text-secondary">{{ __('No documents uploaded.') }}</p>';
-            }
-
-            if (deal.buyer_matches && deal.buyer_matches.length) {
-                html += '<hr><h4>{{ __('Matched') }} {{ $modeTerms['buyer_label'] ?? __('Buyers') }}</h4><div class="list-group list-group-flush">';
-                deal.buyer_matches.forEach(m => {
-                    const scoreClass = m.match_score >= 70 ? 'bg-green-lt' : (m.match_score >= 40 ? 'bg-yellow-lt' : 'bg-red-lt');
-                    const sparkSvg = '<svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2zm0 -12a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2zm-7 12a6 6 0 0 1 6 -6a6 6 0 0 1 -6 -6a6 6 0 0 1 -6 6a6 6 0 0 1 6 6z"/></svg>';
-                    const aiBtn = @json(auth()->user()->tenant->ai_enabled ?? false) ? `<button class="btn btn-outline-purple btn-sm ms-1" onclick="aiDraftBuyerMsg(${deal.id}, ${m.buyer ? m.buyer.id : 0})" title="{{ __('AI Draft Message') }}">${sparkSvg}</button><button class="btn btn-outline-info btn-sm ms-1" onclick="aiExplainMatch(${deal.id}, ${m.buyer ? m.buyer.id : 0})" title="{{ __('Explain Match') }}">${sparkSvg}</button>` : '';
-                    const buyerName = m.buyer ? (m.buyer.company || `${m.buyer.first_name || ''} ${m.buyer.last_name || ''}`.trim() || '-') : '-';
-                    const contactName = m.buyer ? `${m.buyer.first_name || ''} ${m.buyer.last_name || ''}`.trim() : '';
-                    html += `<div class="list-group-item d-flex justify-content-between align-items-center">
-                        <div><strong>${buyerName}</strong><br><small class="text-secondary">${contactName}</small></div>
-                        <div class="d-flex align-items-center">${aiBtn}<span class="badge ${scoreClass} ms-1">${m.match_score}%</span></div>
-                    </div>`;
-                });
-                html += '</div>';
-            }
-
-            document.getElementById('panel-content').innerHTML = html;
-
-            document.getElementById('deal-edit-form').addEventListener('submit', function(e) {
-                e.preventDefault();
-                const btn = document.getElementById('panel-save-btn');
-                btn.disabled = true;
-                btn.textContent = '{{ __('Saving...') }}';
-
-                const formData = new FormData(this);
-                const data = {};
-                formData.forEach((val, key) => data[key] = val);
-
-                fetch(baseUrl + '/' + this.dataset.dealId, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': csrfToken,
-                        'Accept': 'application/json',
-                    },
-                    body: JSON.stringify(data)
-                }).then(r => {
-                    if (!r.ok) throw new Error('Failed');
-                    return r.json();
-                }).then(result => {
-                    if (result.success) {
-                        closeDealPanel();
-                        showToast('{{ ($businessMode ?? "wholesale") === "realestate" ? __("Transaction updated successfully") : __("Deal updated successfully") }}', 'success');
-                        setTimeout(() => location.reload(), 500);
+                body: JSON.stringify({})
+            })
+            .then(function (response) {
+                if (!response.ok) throw new Error('Priority update failed');
+                return response.json();
+            })
+            .then(function (data) {
+                var matching = document.querySelectorAll('.priority-star[data-deal-id="' + button.dataset.dealId + '"]');
+                matching.forEach(function (star) {
+                    star.classList.toggle('is-priority', !!data.is_priority);
+                    var icon = star.querySelector('svg');
+                    if (icon) {
+                        icon.setAttribute('fill', data.is_priority ? 'currentColor' : 'none');
                     }
-                }).catch(() => {
-                    btn.disabled = false;
-                    btn.textContent = '{{ __('Save Changes') }}';
-                    showToast('{{ __('Failed to save changes') }}', 'error');
                 });
+            })
+            .catch(function () {
+                if (window.showToast) {
+                    window.showToast('{{ __('Unable to update priority. Please try again.') }}', 'error');
+                }
+            })
+            .finally(function () {
+                button.disabled = false;
             });
-        }).catch(() => {
-            document.getElementById('panel-content').innerHTML = '<p class="text-danger">{{ __('Failed to load deal details.') }}</p>';
+        });
+    });
+
+    document.querySelectorAll('.pipeline-deal-card .dropdown').forEach(function (dropdown) {
+        var toggle = dropdown.querySelector('[data-bs-toggle="dropdown"]');
+        var card = dropdown.closest('.pipeline-deal-card');
+        if (!toggle || !card) return;
+
+        toggle.addEventListener('show.bs.dropdown', function () {
+            card.classList.add('stage-menu-open');
+        });
+        toggle.addEventListener('hide.bs.dropdown', function () {
+            card.classList.remove('stage-menu-open');
+        });
+    });
+
+    // List view lives inside a horizontally-scrollable table wrapper, which
+    // clips absolutely-positioned menus. Use Popper's fixed strategy so the
+    // stage dropdown floats above the table instead of being cut off.
+    if (window.bootstrap && bootstrap.Dropdown) {
+        document.querySelectorAll('.pipeline-table [data-bs-toggle="dropdown"]').forEach(function (toggle) {
+            bootstrap.Dropdown.getOrCreateInstance(toggle, {
+                popperConfig: function (defaultConfig) {
+                    return Object.assign({}, defaultConfig, { strategy: 'fixed' });
+                }
+            });
         });
     }
 
-    function closeDealPanel() {
-        document.getElementById('dealBackdrop').classList.remove('open');
-        document.getElementById('dealPanel').classList.remove('open');
-    }
+    document.querySelectorAll('.move-stage-btn').forEach(function (item) {
+        item.addEventListener('click', function (event) {
+            event.preventDefault();
 
-    // ── Search & filter ──────────────────────────────────
-    const searchInput = document.getElementById('pipeline-search');
-    const agentFilter = document.getElementById('pipeline-agent-filter');
-
-    function applyFilters() {
-        const params = new URLSearchParams();
-        const search = searchInput ? searchInput.value.trim() : '';
-        const agent = agentFilter ? agentFilter.value : '';
-        if (search) params.set('search', search);
-        if (agent) params.set('agent', agent);
-        const qs = params.toString();
-        window.location.href = '{{ url("/pipeline") }}' + (qs ? '?' + qs : '');
-    }
-
-    if (searchInput) {
-        searchInput.addEventListener('keydown', e => {
-            if (e.key === 'Enter') { e.preventDefault(); applyFilters(); }
-        });
-    }
-    if (agentFilter) {
-        agentFilter.addEventListener('change', applyFilters);
-    }
-
-    // ── Move-to dropdown buttons ────────────────────────
-    document.querySelectorAll('.move-deal-btn').forEach(function(btn) {
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            var dealId = this.dataset.dealId;
-            var stage = this.dataset.stage;
-            fetch(baseUrl + '/' + dealId + '/stage', {
+            fetch(item.dataset.stageUrl, {
                 method: 'PATCH',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken,
+                    'X-CSRF-TOKEN': csrf,
                     'Accept': 'application/json',
+                    'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ stage: stage })
-            }).then(function(r) {
-                if (r.ok) location.reload();
-                else showToast('{{ __("Failed to move deal. Please try again.") }}', 'error');
-            });
-        });
-    });
-
-    // ── Quick Edit on deal cards ─────────────────────────
-    document.addEventListener('click', function(e) {
-        var btn = e.target.closest('.quick-edit-btn');
-        if (!btn) return;
-        e.stopPropagation();
-        e.preventDefault();
-
-        var card = btn.closest('.deal-card');
-        var dealId = btn.dataset.dealId;
-
-        // Get current values from card content
-        var priceEl = card.querySelector('[data-field="contract_price"]');
-        var feeField = '{{ $businessMode === "realestate" ? "total_commission" : "assignment_fee" }}';
-        var feeEl = card.querySelector('[data-field="' + feeField + '"]');
-        var currentPrice = priceEl ? priceEl.dataset.rawValue || '' : '';
-        var currentFee = feeEl ? feeEl.dataset.rawValue || '' : '';
-
-        // Store original content
-        var cardBody = card.querySelector('.deal-card-body');
-        if (!cardBody) return;
-        var originalHtml = cardBody.innerHTML;
-
-        // Hide the quick-edit button while editing
-        btn.style.display = 'none';
-
-        var feeLabel = '{{ $businessMode === "realestate" ? __("Total Commission") : __("Assignment Fee") }}';
-        var feeName = feeField;
-
-        cardBody.innerHTML =
-            '<div class="quick-edit-form" onclick="event.stopPropagation()">' +
-            '<div class="mb-2"><label class="form-label form-label-sm mb-0">{{ __("Contract Price") }}</label>' +
-            '<input type="number" class="form-control form-control-sm" name="contract_price" value="' + currentPrice + '" step="0.01"></div>' +
-            '<div class="mb-2"><label class="form-label form-label-sm mb-0">' + feeLabel + '</label>' +
-            '<input type="number" class="form-control form-control-sm" name="' + feeName + '" value="' + currentFee + '" step="0.01"></div>' +
-            '<div class="d-flex gap-1">' +
-            '<button type="button" class="btn btn-sm btn-primary quick-edit-save">{{ __("Save") }}</button>' +
-            '<button type="button" class="btn btn-sm btn-ghost-secondary quick-edit-cancel">{{ __("Cancel") }}</button>' +
-            '</div></div>';
-
-        // Focus first input
-        var firstInput = cardBody.querySelector('input[name="contract_price"]');
-        if (firstInput) firstInput.focus();
-
-        // Cancel - restore original
-        cardBody.querySelector('.quick-edit-cancel').addEventListener('click', function(ev) {
-            ev.stopPropagation();
-            cardBody.innerHTML = originalHtml;
-            btn.style.display = '';
-        });
-
-        // Save
-        cardBody.querySelector('.quick-edit-save').addEventListener('click', function(ev) {
-            ev.stopPropagation();
-            var form = cardBody.querySelector('.quick-edit-form');
-            var contractPrice = form.querySelector('[name="contract_price"]').value;
-            var feeInput = form.querySelector('[name="' + feeName + '"]');
-            var feeValue = feeInput ? feeInput.value : '';
-            var saveBtn = form.querySelector('.quick-edit-save');
-            saveBtn.disabled = true;
-            saveBtn.textContent = '{{ __("Saving...") }}';
-
-            var payload = { contract_price: contractPrice || null };
-            payload[feeName] = feeValue || null;
-
-            fetch(baseUrl + '/' + dealId, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken,
-                    'Accept': 'application/json',
-                },
-                body: JSON.stringify(payload)
-            }).then(function(r) {
-                if (!r.ok) throw new Error('Failed');
-                return r.json();
-            }).then(function(data) {
-                if (data.success || data.deal) {
-                    // Restore original HTML first
-                    cardBody.innerHTML = originalHtml;
-                    btn.style.display = '';
-
-                    // Update contract price display
-                    var newPriceEl = card.querySelector('[data-field="contract_price"]');
-                    if (newPriceEl && contractPrice) {
-                        newPriceEl.dataset.rawValue = contractPrice;
-                        newPriceEl.textContent = '$' + Number(contractPrice).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0});
-                    }
-
-                    // Update fee display (assignment_fee or total_commission based on mode)
-                    var newFeeEl = card.querySelector('[data-field="' + feeName + '"]');
-                    if (newFeeEl && feeValue) {
-                        newFeeEl.dataset.rawValue = feeValue;
-                        newFeeEl.textContent = '$' + Number(feeValue).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0});
-                    }
-
-                    showToast('{{ __("Deal updated successfully") }}', 'success');
-                } else {
-                    throw new Error('Failed');
+                body: JSON.stringify({ stage: item.dataset.stage })
+            })
+            .then(function (response) {
+                if (!response.ok) throw new Error('Stage update failed');
+                window.location.reload();
+            })
+            .catch(function () {
+                if (window.showToast) {
+                    window.showToast('{{ __('Unable to move deal. Please try again.') }}', 'error');
                 }
-            }).catch(function() {
-                cardBody.innerHTML = originalHtml;
-                btn.style.display = '';
-                showToast('{{ __("Failed to save changes") }}', 'error');
             });
         });
-
-        // Allow Enter key to save and Escape to cancel
-        cardBody.addEventListener('keydown', function(ev) {
-            if (ev.key === 'Enter') {
-                ev.preventDefault();
-                ev.stopPropagation();
-                var saveBtn = cardBody.querySelector('.quick-edit-save');
-                if (saveBtn && !saveBtn.disabled) saveBtn.click();
-            } else if (ev.key === 'Escape') {
-                ev.stopPropagation();
-                var cancelBtn = cardBody.querySelector('.quick-edit-cancel');
-                if (cancelBtn) cancelBtn.click();
-            }
-        });
     });
-
-    // ── Keyboard ─────────────────────────────────────────
-    document.addEventListener('keydown', e => {
-        if (e.key === 'Escape') {
-            closeDealPanel();
-            var aiM = document.getElementById('pipeline-ai-modal');
-            if (aiM) bootstrap.Modal.getInstance(aiM)?.hide();
-        }
-    });
-})();
-
-@if(auth()->user()->tenant->ai_enabled)
-// ── AI Functions for Pipeline ───────────────────────
-var _pipelineCurrentDealId = null;
-var _pipelineCurrentLeadId = null;
-
-function aiAnalyzeDeal(dealId) {
-    _pipelineCurrentDealId = dealId;
-    showPipelineAiModal('{{ __('AI Deal Analysis') }}');
-    pipelineAiRequest('{{ url("/ai/analyze-deal") }}', { deal_id: dealId });
-}
-
-function aiDraftBuyerMsg(dealId, buyerId) {
-    _pipelineCurrentDealId = dealId;
-    showPipelineAiModal('{{ __('AI Buyer Outreach Draft') }}');
-    pipelineAiRequest('{{ url("/ai/draft-buyer-message") }}', { deal_id: dealId, buyer_id: buyerId });
-}
-
-function aiStageAdvice(dealId) {
-    _pipelineCurrentDealId = dealId;
-    showPipelineAiModal('{{ __('AI Stage Advisor') }}');
-    pipelineAiRequest('{{ url("/ai/deal-stage-advice") }}', { deal_id: dealId });
-}
-
-function aiExplainMatch(dealId, buyerId) {
-    _pipelineCurrentDealId = dealId;
-    showPipelineAiModal('{{ __('AI Buyer Match Explanation') }}');
-    pipelineAiRequest('{{ url("/ai/explain-buyer-match") }}', { deal_id: dealId, buyer_id: buyerId });
-}
-
-var _pipelineAiModalInstance = null;
-function showPipelineAiModal(title) {
-    var modal = document.getElementById('pipeline-ai-modal');
-    if (!modal) return;
-    if (!_pipelineAiModalInstance) {
-        _pipelineAiModalInstance = new bootstrap.Modal(modal);
-        modal.addEventListener('hide.bs.modal', function() {
-            if (modal.contains(document.activeElement)) document.activeElement.blur();
-        });
-    }
-    document.getElementById('p-ai-modal-title').textContent = title;
-    document.getElementById('p-ai-loading').style.display = 'block';
-    document.getElementById('p-ai-result').style.display = 'none';
-    document.getElementById('p-ai-error').style.display = 'none';
-    document.getElementById('p-ai-copy-btn').style.display = 'none';
-    document.getElementById('p-ai-actions').style.display = 'none';
-    document.getElementById('p-ai-actions-list').innerHTML = '';
-    _pipelineAiModalInstance.show();
-}
-
-var _pStageLabels = @json(\App\Models\Deal::stageLabels());
-var _pPriorityLabels = { low: '{{ __('Low') }}', medium: '{{ __('Medium') }}', high: '{{ __('High') }}' };
-var _pPriorityColors = { low: 'secondary', medium: 'warning', high: 'danger' };
-
-function pipelineAiRequest(url, data) {
-    var csrfTkn = document.querySelector('meta[name="csrf-token"]').content;
-    fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfTkn, 'Accept': 'application/json' },
-        body: JSON.stringify(data)
-    }).then(r => r.json()).then(res => {
-        document.getElementById('p-ai-loading').style.display = 'none';
-        if (res.error) {
-            document.getElementById('p-ai-error').style.display = 'block';
-            document.getElementById('p-ai-error').textContent = res.error;
-            return;
-        }
-        var text = res.analysis || res.message || res.advice || res.explanation || res.strategy || res.description || '';
-        document.getElementById('p-ai-result').style.display = 'block';
-        document.getElementById('p-ai-text').innerHTML = window.renderAiMarkdown(text);
-        document.getElementById('p-ai-copy-btn').style.display = 'inline-block';
-        window._pipelineAiText = text;
-        if (res.lead_id) _pipelineCurrentLeadId = res.lead_id;
-        renderPipelineActions(res.actions || []);
-    }).catch(() => {
-        document.getElementById('p-ai-loading').style.display = 'none';
-        document.getElementById('p-ai-error').style.display = 'block';
-        document.getElementById('p-ai-error').textContent = '{{ __('Request failed. Please try again.') }}';
-    });
-}
-
-function renderPipelineActions(actions) {
-    var container = document.getElementById('p-ai-actions-list');
-    var wrapper = document.getElementById('p-ai-actions');
-    container.innerHTML = '';
-    if (!actions.length) { wrapper.style.display = 'none'; return; }
-    wrapper.style.display = 'block';
-
-    actions.forEach(function(action) {
-        var row = document.createElement('div');
-        row.className = 'd-flex align-items-center justify-content-between border rounded p-2 mb-2';
-        var left = document.createElement('div');
-        left.className = 'd-flex align-items-center gap-2';
-        var icon = '', detail = '';
-        if (action.type === 'stage_change') {
-            icon = '<span class="badge bg-blue-lt">{{ __('Stage') }}</span>';
-            detail = '<span>' + action.label + ' &rarr; <strong>' + (_pStageLabels[action.stage] || action.stage) + '</strong></span>';
-        } else if (action.type === 'create_task') {
-            icon = '<span class="badge bg-yellow-lt">{{ __('Task') }}</span>';
-            var pc = _pPriorityColors[action.priority] || 'secondary';
-            detail = '<span>' + action.label + ' <span class="badge bg-' + pc + '-lt ms-1">' + (_pPriorityLabels[action.priority] || action.priority) + '</span> <span class="text-secondary small">(' + action.due_days + 'd)</span></span>';
-        } else if (action.type === 'add_note') {
-            icon = '<span class="badge bg-cyan-lt">{{ __('Note') }}</span>';
-            detail = '<span>' + action.label + '</span>';
-        }
-        left.innerHTML = icon + detail;
-
-        var btn = document.createElement('button');
-        btn.className = 'btn btn-sm btn-outline-success ms-2';
-        btn.style.whiteSpace = 'nowrap';
-        btn.textContent = '{{ __('Apply') }}';
-        btn.addEventListener('click', function() { applyPipelineAction(action, this); });
-
-        row.appendChild(left);
-        row.appendChild(btn);
-        container.appendChild(row);
-    });
-}
-
-function applyPipelineAction(action, btn) {
-    var csrfTkn = document.querySelector('meta[name="csrf-token"]').content;
-    btn.disabled = true;
-    btn.textContent = '{{ __('Applying...') }}';
-
-    if (action.type === 'stage_change' && _pipelineCurrentDealId) {
-        fetch('{{ url("/pipeline") }}/' + _pipelineCurrentDealId + '/stage', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfTkn, 'Accept': 'application/json' },
-            body: JSON.stringify({ stage: action.stage })
-        }).then(r => r.json()).then(data => {
-            if (data.success) { markPApplied(btn); setTimeout(() => location.reload(), 800); }
-            else { markPFailed(btn); }
-        }).catch(() => markPFailed(btn));
-
-    } else if (action.type === 'create_task' && _pipelineCurrentLeadId) {
-        var due = new Date(); due.setDate(due.getDate() + (action.due_days || 3));
-        fetch('{{ url("/leads") }}/' + _pipelineCurrentLeadId + '/tasks', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfTkn, 'Accept': 'application/json' },
-            body: JSON.stringify({ title: action.title || action.label, due_date: due.toISOString().split('T')[0] })
-        }).then(r => {
-            if (r.redirected || !r.ok) throw new Error('HTTP ' + r.status);
-            return r.json();
-        }).then(data => {
-            if (data.success) { markPApplied(btn, '{{ __('Task Created') }}'); }
-            else { console.error('Task create response:', data); markPFailed(btn); }
-        }).catch(e => { console.error('Task create error:', e); markPFailed(btn); });
-
-    } else if (action.type === 'add_note' && _pipelineCurrentDealId) {
-        fetch('{{ url("/pipeline") }}/' + _pipelineCurrentDealId + '/activities', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfTkn, 'Accept': 'application/json' },
-            body: JSON.stringify({ type: 'note', subject: '{{ __('AI Recommendation') }}', body: action.text || action.label })
-        }).then(r => {
-            if (r.redirected || !r.ok) throw new Error('HTTP ' + r.status);
-            return r.json();
-        }).then(data => {
-            if (data.success || data.id) { markPApplied(btn, '{{ __('Note Saved') }}'); }
-            else { console.error('Note save response:', data); markPFailed(btn); }
-        }).catch(e => { console.error('Note save error:', e); markPFailed(btn); });
-    } else {
-        console.error('Cannot apply action - missing dealId:', _pipelineCurrentDealId, 'leadId:', _pipelineCurrentLeadId);
-        markPFailed(btn);
-    }
-}
-
-function markPApplied(btn, label) {
-    btn.textContent = label || '{{ __('Applied') }}';
-    btn.className = 'btn btn-sm btn-success ms-2 disabled';
-    btn.disabled = true;
-}
-function markPFailed(btn) {
-    btn.textContent = '{{ __('Failed') }}';
-    btn.className = 'btn btn-sm btn-outline-danger ms-2';
-    setTimeout(function() { btn.textContent = '{{ __('Apply') }}'; btn.className = 'btn btn-sm btn-outline-success ms-2'; btn.disabled = false; }, 2000);
-}
-@endif
+});
 </script>
 @endpush
-
-@if(auth()->user()->tenant->ai_enabled)
-<!-- Pipeline AI Modal -->
-<div class="modal modal-blur fade" id="pipeline-ai-modal" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="p-ai-modal-title">{{ __('AI Assistant') }}</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div id="p-ai-loading" class="text-center py-4">
-                    <div class="spinner-border text-purple" role="status"></div>
-                    <p class="text-secondary mt-2">{{ __('AI is thinking...') }}</p>
-                </div>
-                <div id="p-ai-result" style="display: none;">
-                    <div style="line-height: 1.6;" id="p-ai-text"></div>
-                </div>
-                <div id="p-ai-error" class="alert alert-danger" style="display: none;"></div>
-                <div id="p-ai-actions" class="mt-3" style="display:none;">
-                    <h4 class="mb-2">{{ __('Recommended Actions') }}</h4>
-                    <div id="p-ai-actions-list"></div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ __('Close') }}</button>
-                <button type="button" class="btn btn-primary" id="p-ai-copy-btn" style="display: none;" onclick="navigator.clipboard.writeText(window._pipelineAiText||'').then(()=>{this.textContent='{{ __('Copied!') }}';setTimeout(()=>{this.textContent='{{ __('Copy to Clipboard') }}'},2000)})">{{ __('Copy to Clipboard') }}</button>
-            </div>
-        </div>
-    </div>
-</div>
-@endif
-
-@endsection

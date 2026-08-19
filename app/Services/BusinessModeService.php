@@ -84,6 +84,21 @@ class BusinessModeService
         'vacant'           => 'Vacant',
     ];
 
+    public const WHOLESALE_REHAB_CATEGORIES = [
+        'floors' => 'Floors',
+        'kitchen' => 'Kitchen',
+        'plumbing_and_baths' => 'Plumbing and Baths',
+        'hardware_and_fixtures' => 'Hardware and Fixtures',
+        'electrical' => 'Electrical',
+        'interior_paint_and_drywall' => 'Interior Paint and Drywall',
+        'doors_framing_and_windows' => 'Doors Framing and Windows',
+        'exterior' => 'Exterior',
+        'foundation_and_framing' => 'Foundation and Framing',
+        'hvac' => 'HVAC',
+        'general_conditions' => 'General Conditions',
+        'optional_other' => 'Optional/Other',
+    ];
+
     // ── Wholesale lead sources ──
 
     public const WHOLESALE_LEAD_SOURCES = [
@@ -258,6 +273,10 @@ class BusinessModeService
             'distress_markers' => $isRealEstate
                 ? [] // Real estate agents don't use distress markers
                 : self::WHOLESALE_DISTRESS_MARKERS,
+
+            'rehab_category' => $isRealEstate
+                ? []
+                : self::WHOLESALE_REHAB_CATEGORIES,
 
             'lead_source' => $isRealEstate
                 ? self::REALESTATE_LEAD_SOURCES
@@ -447,6 +466,7 @@ class BusinessModeService
         // Only wholesale mode shows distress markers
         if (self::isWholesale($tenant)) {
             $types['distress_markers'] = __('Distress Markers');
+            $types['rehab_category'] = __('Rehab Categories');
         }
 
         return $types;

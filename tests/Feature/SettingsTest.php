@@ -113,6 +113,19 @@ class SettingsTest extends TestCase
         $this->assertNotNull($this->tenant->fresh()->custom_options['property_type']['warehouse'] ?? null);
     }
 
+    public function test_admin_can_add_custom_rehab_category_option(): void
+    {
+        $this->actingAsAdmin();
+
+        $response = $this->post('/settings/custom-options', [
+            'field_type' => 'rehab_category',
+            'option_name' => 'Landscaping',
+        ]);
+
+        $response->assertRedirect('/settings?tab=custom-fields');
+        $this->assertNotNull($this->tenant->fresh()->custom_options['rehab_category']['landscaping'] ?? null);
+    }
+
     public function test_admin_can_add_custom_lead_source(): void
     {
         $this->actingAsAdmin();
