@@ -7,6 +7,7 @@ use App\Models\Buyer;
 use App\Models\Deal;
 use App\Models\DealBuyerMatch;
 use App\Models\DealDocument;
+use App\Models\GeneratedDocument;
 use App\Models\DealLender;
 use App\Models\LeadPhoto;
 use App\Models\Lender;
@@ -608,6 +609,58 @@ class DealManagementTest extends TestCase
         $response->assertRedirect(route('deals.show', $deal));
         $this->assertDatabaseMissing('deal_documents', ['id' => $document->id]);
         Storage::disk('local')->assertMissing($document->path);
+    }
+
+    public function test_admin_can_delete_a_deal_from_the_pipeline_and_its_files_are_removed(): void
+    {
+        Storage::fake('local');
+        $this->actingAsAdmin();
+        $deal = $this->createDeal();
+        $uploadedDocument = DealDocument::create([
+            'tenant_id' => $this->tenant->id,
+            'deal_id' => $deal->id,
+            'filename' => 'contract.pdf',
+            'original_name' => 'Contract.pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 100,
+            'path' => "deals/{$deal->id}/contract.pdf",
+        ]);
+        $generatedDocument = GeneratedDocument::create([
+            'tenant_id' => $this->tenant->id,
+            'deal_id' => $deal->id,
+            'name' => 'Purchase Agreement',
+            'content' => '<p>Original purchase agreement</p>',
+            'pdf_path' => "generated-documents/{$deal->id}/purchase-agreement.pdf",
+        ]);
+        Storage::disk('local')->put($uploadedDocument->path, 'uploaded document');
+        Storage::disk('local')->put($generatedDocument->pdf_path, 'generated document');
+
+        $this->get('/pipeline')
+            ->assertOk()
+            ->assertSee('data-testid="pipeline-delete-deal"', false)
+            ->assertSee('Delete Deal');
+
+        $response = $this->delete(route('deals.destroy', $deal));
+
+        $response->assertRedirect(route('pipeline'));
+        $this->assertDatabaseMissing('deals', ['id' => $deal->id]);
+        $this->assertDatabaseMissing('deal_documents', ['id' => $uploadedDocument->id]);
+        $this->assertDatabaseMissing('generated_documents', ['id' => $generatedDocument->id]);
+        Storage::disk('local')->assertMissing($uploadedDocument->path);
+        Storage::disk('local')->assertMissing($generatedDocument->pdf_path);
+    }
+
+    public function test_agent_cannot_delete_another_agents_deal_from_the_pipeline(): void
+    {
+        $this->actingAsAdmin();
+        $deal = $this->createDeal();
+        $otherAgent = $this->createUserWithRole('agent');
+
+        $this->actingAs($otherAgent)
+            ->delete(route('deals.destroy', $deal))
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('deals', ['id' => $deal->id]);
     }
 
     public function test_assignment_fee_is_hidden_and_cleared_for_a_fix_and_flip_deal(): void

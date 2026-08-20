@@ -301,6 +301,7 @@ Route::middleware(['auth', 'tenant', 'require2fa'])->group(function () {
         Route::get('/pipeline/{deal}', [DealController::class, 'show'])->name('deals.show');
         Route::put('/pipeline/{deal}', [DealController::class, 'update'])->name('deals.update');
         Route::patch('/pipeline/{deal}', [DealController::class, 'update'])->name('deals.quickUpdate');
+        Route::delete('/pipeline/{deal}', [DealController::class, 'destroy'])->name('deals.destroy');
         Route::patch('/pipeline/{deal}/stage', [DealController::class, 'updateStage'])->name('deals.updateStage');
         Route::patch('/pipeline/{deal}/priority', [DealController::class, 'togglePriority'])->name('deals.togglePriority');
         Route::patch('/pipeline/{deal}/buyer', [DealController::class, 'selectBuyer'])->name('deals.selectBuyer');
