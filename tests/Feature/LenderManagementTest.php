@@ -172,6 +172,20 @@ class LenderManagementTest extends TestCase
             ->assertSee('purchase_closing_cost_flat_fee', false);
     }
 
+    public function test_editing_a_program_can_turn_off_builder_risk_insurance(): void
+    {
+        $this->actingAsAdmin();
+        $lender = $this->makeLender();
+        $program = $this->makeProgram($lender, ['builders_risk_insurance' => true]);
+
+        // Browsers omit an unchecked checkbox from the request entirely.
+        $this->put("/lender-programs/{$program->id}", [
+            'program_name' => $program->program_name,
+        ])->assertRedirect("/lenders/{$lender->id}");
+
+        $this->assertFalse($program->fresh()->builders_risk_insurance);
+    }
+
     public function test_admin_can_attach_lender_program_to_deal_and_update_status(): void
     {
         $this->actingAsAdmin();
