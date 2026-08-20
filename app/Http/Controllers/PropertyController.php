@@ -101,7 +101,7 @@ class PropertyController extends Controller
             $lead->update(['timezone' => $timezone]);
         }
 
-        if ($request->ajax()) {
+        if ($request->expectsJson()) {
             return response()->json(['success' => true, 'property' => $property]);
         }
 

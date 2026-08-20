@@ -96,7 +96,10 @@ class LeadManagementTest extends TestCase
         $this->actingAsAdmin();
         $lead = $this->createLead();
 
-        $this->post("/leads/{$lead->id}/property", [
+        $this->withHeaders([
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ])->post("/leads/{$lead->id}/property", [
             'address' => '123 Main St',
             'city' => 'Atlanta',
             'state' => 'GA',
@@ -107,7 +110,8 @@ class LeadManagementTest extends TestCase
             'bathrooms' => 2,
             'after_repair_value' => 200000,
             'repair_estimate' => 20000,
-        ])->assertRedirect();
+        ])->assertOk()
+            ->assertJsonPath('success', true);
 
         $property = $lead->fresh()->property;
         $this->assertNotNull($property);
@@ -274,6 +278,8 @@ class LeadManagementTest extends TestCase
         $response->assertSee("payload.append('photos[]', files[index]);", false);
         $response->assertSee("'Accept': 'application/json'", false);
         $response->assertSee('return response.json();', false);
+        $response->assertSee('savePropertyBeforePhotoUpload', false);
+        $response->assertSee('Saving property details...', false);
         $response->assertDontSee('fileInput.files = e.dataTransfer.files;', false);
     }
 
