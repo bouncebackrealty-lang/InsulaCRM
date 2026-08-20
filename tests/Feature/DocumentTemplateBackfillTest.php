@@ -11,7 +11,10 @@ class DocumentTemplateBackfillTest extends TestCase
 {
     public function test_original_templates_replace_generic_placeholders_for_existing_tenants(): void
     {
-        $this->actingAsAdmin(['name' => 'Bounce Back Realty']);
+        $this->actingAsAdmin([
+            'name' => 'Bounce Back Realty LLC',
+            'email' => 'bouncebackrealty@gmail.com',
+        ]);
 
         DocumentTemplate::create([
             'tenant_id' => $this->tenant->id,

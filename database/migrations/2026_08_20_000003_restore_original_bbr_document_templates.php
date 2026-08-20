@@ -12,7 +12,10 @@ return new class extends Migration
 
 
         DB::table('tenants')
-            ->where('name', 'Bounce Back Realty')
+            ->where(function ($query): void {
+                $query->whereIn('name', ['Bounce Back Realty', 'Bounce Back Realty LLC'])
+                    ->orWhere('email', 'bouncebackrealty@gmail.com');
+            })
             ->orderBy('id')
             ->each(function (object $tenant) use ($templates): void {
                 foreach ($templates as $template) {
