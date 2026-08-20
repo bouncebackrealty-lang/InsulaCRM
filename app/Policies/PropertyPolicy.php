@@ -34,4 +34,13 @@ class PropertyPolicy
     {
         return $user->isAdmin() || $user->isFieldScout();
     }
+
+    public function delete(User $user, Property $property): bool
+    {
+        if ($user->isAdmin() || $user->isAcquisitionAgent()) {
+            return true;
+        }
+
+        return $user->isAgent() && $property->lead?->agent_id === $user->id;
+    }
 }

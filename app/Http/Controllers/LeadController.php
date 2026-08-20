@@ -143,6 +143,10 @@ class LeadController extends Controller
 
             case 'delete':
                 foreach ($leads as $lead) {
+                    // Some existing production schemas did not cascade this
+                    // relationship. Delete it explicitly so lead cleanup
+                    // cannot leave a stranded property record behind.
+                    $lead->property()->delete();
                     $lead->delete();
                     AuditLog::log('lead.deleted', $lead);
                 }
@@ -331,6 +335,9 @@ class LeadController extends Controller
     public function destroy(Lead $lead)
     {
         $this->authorize('delete', $lead);
+        // Keep the cleanup correct even on installations created before the
+        // database-level property foreign key was added or repaired.
+        $lead->property()->delete();
         $lead->delete();
         AuditLog::log('lead.deleted', $lead);
 

@@ -28,6 +28,8 @@ class LenderLoanProgramRequest extends FormRequest
             'max_ltv' => 'nullable|numeric|min:0|max:100',
             'term_length' => 'nullable|string|max:255',
             'purchase_closing_cost_percent' => 'nullable|numeric|min:0|max:100',
+            'purchase_closing_cost_type' => 'nullable|in:percentage,flat',
+            'purchase_closing_cost_flat_fee' => 'nullable|numeric|min:0|max:99999999.99',
             'builders_risk_insurance' => 'boolean',
             'notes' => 'nullable|string',
         ];

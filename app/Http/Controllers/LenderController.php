@@ -96,7 +96,7 @@ class LenderController extends Controller
     {
         $this->authorize('update', $lender);
 
-        $data = $request->validated();
+        $data = $this->normalizeLoanProgramData($request->validated());
         $data['tenant_id'] = auth()->user()->tenant_id;
         $data['lender_id'] = $lender->id;
 
@@ -112,7 +112,10 @@ class LenderController extends Controller
         $lender = $program->lender;
         $this->authorize('update', $lender);
 
-        $program->update($request->validated());
+        $program->update($this->normalizeLoanProgramData(
+            $request->validated(),
+            $program->purchase_closing_cost_type,
+        ));
 
         AuditLog::log('lender_program.updated', $program);
 
@@ -129,5 +132,20 @@ class LenderController extends Controller
         $program->delete();
 
         return redirect()->route('lenders.show', $lender)->with('success', __('Loan program deleted.'));
+    }
+
+    private function normalizeLoanProgramData(array $data, ?string $existingClosingCostType = null): array
+    {
+        $data['purchase_closing_cost_type'] = $data['purchase_closing_cost_type']
+            ?? $existingClosingCostType
+            ?? 'percentage';
+
+        if ($data['purchase_closing_cost_type'] === 'flat') {
+            $data['purchase_closing_cost_percent'] = null;
+        } else {
+            $data['purchase_closing_cost_flat_fee'] = null;
+        }
+
+        return $data;
     }
 }

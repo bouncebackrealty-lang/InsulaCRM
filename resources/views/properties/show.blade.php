@@ -14,6 +14,15 @@
         <div class="card mb-3">
             <div class="card-header">
                 <h3 class="card-title">{{ __('Property Details') }}</h3>
+                @can('delete', $property)
+                <div class="card-actions">
+                    <form method="POST" action="{{ route('properties.destroy', $property) }}" onsubmit="return confirm('{{ __('Delete this property? This cannot be undone.') }}')">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit" class="btn btn-outline-danger btn-sm">{{ __('Delete Property') }}</button>
+                    </form>
+                </div>
+                @endcan
             </div>
             <div class="card-body">
                 <div class="datagrid">
@@ -54,7 +63,11 @@
                     <div class="datagrid-item">
                         <div class="datagrid-title">{{ ($businessMode ?? 'wholesale') === 'realestate' ? __('Contact') : __('Lead') }}</div>
                         <div class="datagrid-content">
-                            <a href="{{ route('leads.show', $property->lead_id) }}">{{ $property->lead->full_name }}</a>
+                            @if($property->lead)
+                                <a href="{{ route('leads.show', $property->lead) }}">{{ $property->lead->full_name }}</a>
+                            @else
+                                <span class="text-warning">{{ __('Unlinked property') }}</span>
+                            @endif
                         </div>
                     </div>
                 </div>

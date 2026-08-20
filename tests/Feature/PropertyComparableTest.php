@@ -72,4 +72,20 @@ class PropertyComparableTest extends TestCase
         $response->assertSee('MAO (75% Rule)');
         $response->assertSee('Comparable Sales');
     }
+
+    public function test_admin_can_delete_a_property_from_the_properties_area(): void
+    {
+        $this->actingAsAdmin();
+        $property = $this->createProperty(['address' => '900 Cleanup Lane']);
+
+        $this->get('/properties')
+            ->assertOk()
+            ->assertSee('900 Cleanup Lane')
+            ->assertSee('Delete');
+
+        $this->delete("/properties/{$property->id}")
+            ->assertRedirect('/properties');
+
+        $this->assertDatabaseMissing('properties', ['id' => $property->id]);
+    }
 }

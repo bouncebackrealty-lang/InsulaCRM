@@ -76,7 +76,7 @@ class LeadManagementTest extends TestCase
         ]);
 
         $property = $lead->fresh()->property;
-        $response->assertRedirect("/leads/{$lead->id}");
+        $response->assertRedirect("/properties/{$property->id}");
         $this->assertDatabaseHas('properties', [
             'lead_id' => $lead->id,
             'tenant_id' => $this->tenant->id,
@@ -88,6 +88,49 @@ class LeadManagementTest extends TestCase
         $leadPage->assertStatus(200);
         $leadPage->assertSee('View ARV / Comps');
         $leadPage->assertSee(route('properties.show', $property), false);
+    }
+
+    public function test_property_details_persist_after_reloading_the_lead_and_uploading_a_photo(): void
+    {
+        Storage::fake('public');
+        $this->actingAsAdmin();
+        $lead = $this->createLead();
+
+        $this->post("/leads/{$lead->id}/property", [
+            'address' => '123 Main St',
+            'city' => 'Atlanta',
+            'state' => 'GA',
+            'zip_code' => '30301',
+            'property_type' => 'single_family',
+            'condition' => 'fair',
+            'bedrooms' => 3,
+            'bathrooms' => 2,
+            'after_repair_value' => 200000,
+            'repair_estimate' => 20000,
+        ])->assertRedirect();
+
+        $property = $lead->fresh()->property;
+        $this->assertNotNull($property);
+
+        $this->get("/leads/{$lead->id}")
+            ->assertOk()
+            ->assertSee($property->address)
+            ->assertSee($property->after_repair_value);
+
+        $this->post("/leads/{$lead->id}/photos", [
+            'photos' => [UploadedFile::fake()->image('front.jpg', 20, 20)],
+        ])->assertRedirect("/leads/{$lead->id}");
+
+        $this->get("/leads/{$lead->id}")
+            ->assertOk()
+            ->assertSee($property->address)
+            ->assertSee($property->after_repair_value);
+
+        $this->assertDatabaseHas('properties', [
+            'id' => $property->id,
+            'lead_id' => $lead->id,
+            'after_repair_value' => 200000,
+        ]);
     }
 
     public function test_admin_can_select_mao_percentage_when_saving_property(): void
@@ -108,7 +151,7 @@ class LeadManagementTest extends TestCase
             'our_offer' => 175000,
         ]);
 
-        $response->assertRedirect("/leads/{$lead->id}");
+        $response->assertRedirect("/properties/{$lead->fresh()->property->id}");
         $this->assertDatabaseHas('properties', [
             'lead_id' => $lead->id,
             'mao_percentage' => 72,
@@ -144,7 +187,7 @@ class LeadManagementTest extends TestCase
             'our_offer' => 175000,
         ]);
 
-        $response->assertRedirect("/leads/{$lead->id}");
+        $response->assertRedirect("/properties/{$lead->fresh()->property->id}");
         $this->assertDatabaseHas('properties', [
             'lead_id' => $lead->id,
             'deal_type' => 'fix_and_flip',

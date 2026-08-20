@@ -491,7 +491,11 @@
                                     @if($dl->loanProgram->max_ltc !== null){{ __('LTC:') }} {{ $dl->loanProgram->max_ltc }}%<br>@endif
                                     @if($dl->loanProgram->max_ltv !== null){{ __('LTV:') }} {{ $dl->loanProgram->max_ltv }}%<br>@endif
                                     @if($dl->loanProgram->term_length){{ __('Term:') }} {{ $dl->loanProgram->term_length }}<br>@endif
-                                    @if($dl->loanProgram->purchase_closing_cost_percent !== null){{ __('Purchase Closing Cost:') }} {{ $dl->loanProgram->purchase_closing_cost_percent }}%<br>@endif
+                                    @if(($dl->loanProgram->purchase_closing_cost_type ?? 'percentage') === 'flat' && $dl->loanProgram->purchase_closing_cost_flat_fee !== null)
+                                        {{ __('Purchase Closing Cost:') }} {{ Fmt::currency($dl->loanProgram->purchase_closing_cost_flat_fee) }}<br>
+                                    @elseif($dl->loanProgram->purchase_closing_cost_percent !== null)
+                                        {{ __('Purchase Closing Cost:') }} {{ $dl->loanProgram->purchase_closing_cost_percent }}%<br>
+                                    @endif
                                     {{ __('Builder Risk:') }} {{ $dl->loanProgram->builders_risk_insurance ? __('Yes') : __('No') }}
                                     @if($dl->loanProgram->notes)<br>{{ __('Program Notes:') }} {{ $dl->loanProgram->notes }}@endif
                                 @else

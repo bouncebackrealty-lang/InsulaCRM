@@ -15,6 +15,7 @@ class LenderLoanProgram extends Model
         'Bridge',
         'DSCR',
         'New Construction',
+        'Wholesale',
     ];
 
     protected $fillable = [
@@ -27,6 +28,8 @@ class LenderLoanProgram extends Model
         'max_ltv',
         'term_length',
         'purchase_closing_cost_percent',
+        'purchase_closing_cost_type',
+        'purchase_closing_cost_flat_fee',
         'builders_risk_insurance',
         'notes',
     ];
@@ -39,6 +42,7 @@ class LenderLoanProgram extends Model
             'max_ltc' => 'decimal:2',
             'max_ltv' => 'decimal:2',
             'purchase_closing_cost_percent' => 'decimal:2',
+            'purchase_closing_cost_flat_fee' => 'decimal:2',
             'builders_risk_insurance' => 'boolean',
         ];
     }

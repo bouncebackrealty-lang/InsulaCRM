@@ -93,7 +93,11 @@
                 <tr>
                     <td>{{ $property->full_address }}</td>
                     <td>
-                        <a href="{{ route('leads.show', $property->lead_id) }}">{{ $property->lead->full_name ?? '-' }}</a>
+                        @if($property->lead)
+                            <a href="{{ route('leads.show', $property->lead) }}">{{ $property->lead->full_name }}</a>
+                        @else
+                            <span class="text-warning">{{ __('Unlinked property') }}</span>
+                        @endif
                     </td>
                     <td>{{ __(ucwords(str_replace('_', ' ', $property->property_type))) }}</td>
                     @if(($businessMode ?? 'wholesale') === 'wholesale')
@@ -137,7 +141,16 @@
                     <td>{{ $property->year_built ?? '-' }}</td>
                     @endif
                     <td>
-                        <a href="{{ route('properties.show', $property) }}" class="btn btn-ghost-secondary btn-sm">{{ __('View') }}</a>
+                        <div class="btn-list flex-nowrap">
+                            <a href="{{ route('properties.show', $property) }}" class="btn btn-ghost-secondary btn-sm">{{ __('View') }}</a>
+                            @can('delete', $property)
+                            <form method="POST" action="{{ route('properties.destroy', $property) }}" onsubmit="return confirm('{{ __('Delete this property? This cannot be undone.') }}')">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="btn btn-ghost-danger btn-sm">{{ __('Delete') }}</button>
+                            </form>
+                            @endcan
+                        </div>
                     </td>
                 </tr>
                 @empty

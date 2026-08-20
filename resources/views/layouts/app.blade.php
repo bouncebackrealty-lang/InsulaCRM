@@ -741,6 +741,17 @@
     </script>
     {{-- Quick-Add FAB --}}
     @auth
+    @php
+        $quickAddContext = null;
+
+        if (request()->routeIs('contractors.*') && auth()->user()->canManageContractors()) {
+            $quickAddContext = ['route' => route('contractors.create'), 'label' => __('Add Another Contractor')];
+        } elseif (request()->routeIs('lenders.*') && auth()->user()->canManageLenders()) {
+            $quickAddContext = ['route' => route('lenders.create'), 'label' => __('Add Another Lender')];
+        } elseif (request()->routeIs('title-companies.*') && auth()->user()->canManageLenders()) {
+            $quickAddContext = ['route' => route('title-companies.create'), 'label' => __('Add Another Title Company')];
+        }
+    @endphp
     <style>
         #quick-add-fab .btn-primary { transition: transform 0.2s ease, box-shadow 0.2s ease; }
         #quick-add-fab .btn-primary:hover { transform: scale(1.1); box-shadow: 0 6px 24px rgba(var(--tblr-primary-rgb), 0.4) !important; }
@@ -754,6 +765,13 @@
                 <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </button>
             <div class="dropdown-menu dropdown-menu-end mb-1">
+                @if($quickAddContext)
+                <a class="dropdown-item fw-bold" href="{{ $quickAddContext['route'] }}">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon dropdown-item-icon" width="16" height="16" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    {{ $quickAddContext['label'] }}
+                </a>
+                <div class="dropdown-divider"></div>
+                @endif
                 <a class="dropdown-item" href="{{ route('leads.create') }}">
                     <svg xmlns="http://www.w3.org/2000/svg" class="icon dropdown-item-icon" width="16" height="16" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.85"/></svg>
                     {{ __('New Lead') }}

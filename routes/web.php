@@ -286,6 +286,7 @@ Route::middleware(['auth', 'tenant', 'require2fa'])->group(function () {
     Route::middleware('role:admin,agent,acquisition_agent,field_scout,listing_agent,buyers_agent')->group(function () {
         Route::get('/properties', [PropertyController::class, 'index'])->name('properties.index');
         Route::get('/properties/{property}', [PropertyController::class, 'show'])->name('properties.show');
+        Route::delete('/properties/{property}', [PropertyController::class, 'destroy'])->name('properties.destroy');
     });
 
     // ── Field scout property submission: field_scout + admin ─────────

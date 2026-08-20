@@ -872,4 +872,38 @@ HTML,
         $response->assertSee('1,500');
         $response->assertSee('07/01/2026');
     }
+
+    public function test_letter_of_intent_uses_the_selected_buyer_for_its_buyer_section(): void
+    {
+        $this->actingAsAdmin();
+        $deal = $this->createDeal();
+        $buyer = Buyer::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'first_name' => 'Priya',
+            'last_name' => 'Testmore',
+            'company' => null,
+        ]);
+        $deal->update(['selected_buyer_id' => $buyer->id]);
+
+        $template = DocumentTemplate::create([
+            'tenant_id' => $this->tenant->id,
+            'name' => '1A-01-Letter of Intent',
+            'type' => 'loi',
+            'content' => '<h3>SECTION 3 — BUYER</h3><p><strong>Buyer:</strong> {{company.name}}</p>',
+        ]);
+
+        $migration = require database_path('migrations/2026_08_20_000001_use_selected_buyer_in_letter_of_intent.php');
+        $migration->up();
+
+        $template->refresh();
+        $this->assertStringContainsString('{{buyer.top_match}}', $template->content);
+        $this->assertContains('buyer.top_match', $template->merge_fields);
+
+        $this->post(route('documents.store', $deal), ['template_id' => $template->id])
+            ->assertRedirect();
+
+        $content = GeneratedDocument::latest('id')->value('content');
+        $this->assertStringContainsString('Priya Testmore', $content);
+        $this->assertStringNotContainsString($this->tenant->name, $content);
+    }
 }

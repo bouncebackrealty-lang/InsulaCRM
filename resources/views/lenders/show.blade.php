@@ -16,6 +16,11 @@
                 <h3 class="card-title">{{ __('Lender Details') }}</h3>
                 <div class="card-actions">
                     <a href="{{ route('lenders.edit', $lender) }}" class="btn btn-outline-primary btn-sm">{{ __('Edit') }}</a>
+                    <form method="POST" action="{{ route('lenders.destroy', $lender) }}" class="d-inline" onsubmit="return confirm('{{ __('Delete this lender and its loan programs? This cannot be undone.') }}')">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit" class="btn btn-outline-danger btn-sm">{{ __('Delete') }}</button>
+                    </form>
                 </div>
             </div>
             <div class="card-body">
@@ -79,32 +84,42 @@
                     </thead>
                     <tbody>
                         @forelse($lender->loanPrograms as $program)
-                        <tr>
-                            @php $programFormId = 'program-update-' . $program->id; @endphp
+                        @php $programFormId = 'program-update-' . $program->id; @endphp
+                        <tr data-program-form-id="{{ $programFormId }}">
                             <td>
                                 <form id="{{ $programFormId }}" method="POST" action="{{ route('lenders.programs.update', $program) }}" class="d-none">
                                     @csrf
                                     @method('PUT')
                                 </form>
-                                <select form="{{ $programFormId }}" name="program_name" class="form-select form-select-sm" required>
+                                <select form="{{ $programFormId }}" name="program_name" class="form-select form-select-sm" required disabled>
                                     @if(!in_array($program->program_name, \App\Models\LenderLoanProgram::STANDARD_PROGRAMS, true))<option selected value="{{ $program->program_name }}">{{ $program->program_name }}</option>@endif
                                     @foreach(\App\Models\LenderLoanProgram::STANDARD_PROGRAMS as $programName)<option value="{{ $programName }}" {{ old('program_name', $program->program_name) === $programName ? 'selected' : '' }}>{{ $programName }}</option>@endforeach
                                 </select>
                             </td>
-                            <td><input form="{{ $programFormId }}" type="number" name="interest_rate" class="form-control form-control-sm" value="{{ $program->interest_rate }}" step="0.01" min="0" max="100"></td>
-                            <td><input form="{{ $programFormId }}" type="number" name="points" class="form-control form-control-sm" value="{{ $program->points }}" step="0.01" min="0" max="100"></td>
-                            <td><input form="{{ $programFormId }}" type="number" name="max_ltc" class="form-control form-control-sm" value="{{ $program->max_ltc }}" step="0.01" min="0" max="100"></td>
-                            <td><input form="{{ $programFormId }}" type="number" name="max_ltv" class="form-control form-control-sm" value="{{ $program->max_ltv }}" step="0.01" min="0" max="100"></td>
-                            <td><input form="{{ $programFormId }}" type="text" name="term_length" class="form-control form-control-sm" value="{{ $program->term_length }}"></td>
-                            <td><input form="{{ $programFormId }}" type="number" name="purchase_closing_cost_percent" class="form-control form-control-sm" value="{{ $program->purchase_closing_cost_percent }}" step="0.01" min="0" max="100"></td>
+                            <td><input form="{{ $programFormId }}" type="number" name="interest_rate" class="form-control form-control-sm" value="{{ $program->interest_rate }}" step="0.01" min="0" max="100" readonly></td>
+                            <td><input form="{{ $programFormId }}" type="number" name="points" class="form-control form-control-sm" value="{{ $program->points }}" step="0.01" min="0" max="100" readonly></td>
+                            <td><input form="{{ $programFormId }}" type="number" name="max_ltc" class="form-control form-control-sm" value="{{ $program->max_ltc }}" step="0.01" min="0" max="100" readonly></td>
+                            <td><input form="{{ $programFormId }}" type="number" name="max_ltv" class="form-control form-control-sm" value="{{ $program->max_ltv }}" step="0.01" min="0" max="100" readonly></td>
+                            <td><input form="{{ $programFormId }}" type="text" name="term_length" class="form-control form-control-sm" value="{{ $program->term_length }}" readonly></td>
+                            <td>
+                                @php $closingCostType = $program->purchase_closing_cost_type ?? 'percentage'; @endphp
+                                <select form="{{ $programFormId }}" name="purchase_closing_cost_type" class="form-select form-select-sm closing-cost-type mb-1" disabled>
+                                    <option value="percentage" {{ $closingCostType === 'percentage' ? 'selected' : '' }}>{{ __('Percentage') }}</option>
+                                    <option value="flat" {{ $closingCostType === 'flat' ? 'selected' : '' }}>{{ __('Flat fee') }}</option>
+                                </select>
+                                <input form="{{ $programFormId }}" type="number" name="purchase_closing_cost_percent" class="form-control form-control-sm closing-cost-percent {{ $closingCostType === 'flat' ? 'd-none' : '' }}" value="{{ $program->purchase_closing_cost_percent }}" step="0.01" min="0" max="100" placeholder="{{ __('Percent') }}" readonly>
+                                <input form="{{ $programFormId }}" type="number" name="purchase_closing_cost_flat_fee" class="form-control form-control-sm closing-cost-flat {{ $closingCostType === 'flat' ? '' : 'd-none' }}" value="{{ $program->purchase_closing_cost_flat_fee }}" step="0.01" min="0" placeholder="{{ __('Amount') }}" readonly>
+                            </td>
                             <td>
                                 <label class="form-check form-switch m-0">
-                                    <input form="{{ $programFormId }}" type="checkbox" name="builders_risk_insurance" value="1" class="form-check-input" {{ $program->builders_risk_insurance ? 'checked' : '' }}>
+                                    <input form="{{ $programFormId }}" type="checkbox" name="builders_risk_insurance" value="1" class="form-check-input" {{ $program->builders_risk_insurance ? 'checked' : '' }} disabled>
                                 </label>
                             </td>
-                            <td><input form="{{ $programFormId }}" type="text" name="notes" class="form-control form-control-sm" value="{{ $program->notes }}"></td>
+                            <td><input form="{{ $programFormId }}" type="text" name="notes" class="form-control form-control-sm" value="{{ $program->notes }}" readonly></td>
                             <td class="text-nowrap">
-                                <button form="{{ $programFormId }}" type="submit" class="btn btn-sm btn-outline-primary">{{ __('Save') }}</button>
+                                <button type="button" class="btn btn-sm btn-outline-primary program-edit">{{ __('Edit') }}</button>
+                                <button form="{{ $programFormId }}" type="submit" class="btn btn-sm btn-primary program-save d-none">{{ __('Save') }}</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary program-cancel d-none">{{ __('Cancel') }}</button>
                                 <form method="POST" action="{{ route('lenders.programs.destroy', $program) }}" class="d-inline" onsubmit="return confirm('{{ __('Delete this loan program?') }}')">
                                     @csrf
                                     @method('DELETE')
@@ -151,9 +166,15 @@
                         <label class="form-label">{{ __('Term Length') }}</label>
                         <input type="text" name="term_length" class="form-control" value="{{ old('term_length') }}" placeholder="{{ __('e.g., 12 months') }}">
                     </div>
-                    <div class="col-md-1">
-                        <label class="form-label">{{ __('Closing %') }}</label>
-                        <input type="number" name="purchase_closing_cost_percent" class="form-control" value="{{ old('purchase_closing_cost_percent') }}" step="0.01" min="0" max="100">
+                    <div class="col-md-2">
+                        <label class="form-label">{{ __('Closing Cost') }}</label>
+                        @php $newClosingCostType = old('purchase_closing_cost_type', 'percentage'); @endphp
+                        <select name="purchase_closing_cost_type" class="form-select closing-cost-type mb-1">
+                            <option value="percentage" {{ $newClosingCostType === 'percentage' ? 'selected' : '' }}>{{ __('Percentage') }}</option>
+                            <option value="flat" {{ $newClosingCostType === 'flat' ? 'selected' : '' }}>{{ __('Flat fee') }}</option>
+                        </select>
+                        <input type="number" name="purchase_closing_cost_percent" class="form-control closing-cost-percent {{ $newClosingCostType === 'flat' ? 'd-none' : '' }}" value="{{ old('purchase_closing_cost_percent') }}" step="0.01" min="0" max="100" placeholder="{{ __('Percent') }}">
+                        <input type="number" name="purchase_closing_cost_flat_fee" class="form-control closing-cost-flat {{ $newClosingCostType === 'flat' ? '' : 'd-none' }}" value="{{ old('purchase_closing_cost_flat_fee') }}" step="0.01" min="0" placeholder="{{ __('Amount') }}">
                     </div>
                     <div class="col-md-1">
                         <label class="form-label">{{ __('Builder Risk') }}</label>
@@ -213,3 +234,49 @@
     </div>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    function updateClosingCostInputs(container) {
+        var type = container.querySelector('.closing-cost-type');
+        if (!type) return;
+        container.querySelectorAll('.closing-cost-percent').forEach(function (field) {
+            field.classList.toggle('d-none', type.value === 'flat');
+        });
+        container.querySelectorAll('.closing-cost-flat').forEach(function (field) {
+            field.classList.toggle('d-none', type.value !== 'flat');
+        });
+    }
+
+    document.querySelectorAll('.closing-cost-type').forEach(function (select) {
+        select.addEventListener('change', function () {
+            updateClosingCostInputs(this.closest('td, .col-md-2'));
+        });
+    });
+
+    document.querySelectorAll('[data-program-form-id]').forEach(function (row) {
+        var formId = row.dataset.programFormId;
+        var editButton = row.querySelector('.program-edit');
+        var saveButton = row.querySelector('.program-save');
+        var cancelButton = row.querySelector('.program-cancel');
+
+        editButton.addEventListener('click', function () {
+            row.querySelectorAll('[form="' + formId + '"]').forEach(function (field) {
+                if (field.matches('input, select, textarea')) {
+                    field.disabled = false;
+                    field.removeAttribute('readonly');
+                }
+            });
+            editButton.classList.add('d-none');
+            saveButton.classList.remove('d-none');
+            cancelButton.classList.remove('d-none');
+        });
+
+        cancelButton.addEventListener('click', function () {
+            window.location.reload();
+        });
+    });
+});
+</script>
+@endpush

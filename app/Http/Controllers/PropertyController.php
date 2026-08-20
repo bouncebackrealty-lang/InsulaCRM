@@ -86,12 +86,14 @@ class PropertyController extends Controller
             );
         }
 
-        $property = Property::updateOrCreate(
-            ['lead_id' => $lead->id],
-            $data
-        );
+        // Resolve the property through the lead relationship so an existing
+        // record is always updated in the current tenant instead of creating
+        // a detached duplicate.
+        $property = $lead->property()->firstOrNew();
+        $property->fill($data);
+        $property->save();
 
-        AuditLog::log('property.created', $property);
+        AuditLog::log($property->wasRecentlyCreated ? 'property.created' : 'property.updated', $property);
 
         // Auto-detect lead timezone from property zip code
         $timezone = ZipTimezoneService::detect($property->zip_code);
@@ -103,7 +105,9 @@ class PropertyController extends Controller
             return response()->json(['success' => true, 'property' => $property]);
         }
 
-        return redirect()->route('leads.show', $lead)->with('success', 'Property saved successfully.');
+        return redirect()
+            ->route('properties.show', $property)
+            ->with('success', 'Property saved successfully. Continue with ARV and comparable sales below.');
     }
 
     /**
@@ -144,5 +148,22 @@ class PropertyController extends Controller
         $property->load('lead');
 
         return view('properties.show', compact('property'));
+    }
+
+    /**
+     * Remove a property, including an old record whose lead is no longer present.
+     */
+    public function destroy(Property $property)
+    {
+        $this->authorize('delete', $property);
+
+        $address = $property->full_address;
+        $property->delete();
+
+        AuditLog::log('property.deleted', null, ['address' => $address]);
+
+        return redirect()
+            ->route('properties.index')
+            ->with('success', 'Property deleted successfully.');
     }
 }

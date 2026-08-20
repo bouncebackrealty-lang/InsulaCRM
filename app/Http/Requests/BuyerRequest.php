@@ -42,6 +42,8 @@ class BuyerRequest extends FormRequest
             'preferred_property_types' => 'nullable|array',
             'preferred_zip_codes' => 'nullable|array',
             'preferred_states' => 'nullable|array',
+            'asset_classes' => 'nullable|array',
+            'asset_classes.*' => 'string|in:sfr,multi_family,commercial,land',
             'notes' => 'nullable|string',
         ];
     }

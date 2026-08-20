@@ -147,6 +147,31 @@ class LenderManagementTest extends TestCase
         $this->assertDatabaseMissing('lender_loan_programs', ['id' => $program->id]);
     }
 
+    public function test_loan_programs_support_wholesale_and_flat_closing_fees(): void
+    {
+        $this->actingAsAdmin();
+        $lender = $this->makeLender();
+
+        $this->post("/lenders/{$lender->id}/programs", [
+            'program_name' => 'Wholesale',
+            'purchase_closing_cost_type' => 'flat',
+            'purchase_closing_cost_flat_fee' => 1250,
+        ])->assertRedirect("/lenders/{$lender->id}");
+
+        $program = LenderLoanProgram::where('program_name', 'Wholesale')->firstOrFail();
+        $this->assertSame('flat', $program->purchase_closing_cost_type);
+        $this->assertSame('1250.00', $program->purchase_closing_cost_flat_fee);
+        $this->assertNull($program->purchase_closing_cost_percent);
+
+        $this->get("/lenders/{$lender->id}")
+            ->assertOk()
+            ->assertSee('Wholesale')
+            ->assertSee('Flat fee')
+            ->assertSee('Edit')
+            ->assertSee('Add Another Lender')
+            ->assertSee('purchase_closing_cost_flat_fee', false);
+    }
+
     public function test_admin_can_attach_lender_program_to_deal_and_update_status(): void
     {
         $this->actingAsAdmin();

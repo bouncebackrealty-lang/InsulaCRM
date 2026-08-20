@@ -33,6 +33,7 @@ class BuyerManagementTest extends TestCase
             'preferred_property_types' => ['single_family', 'multi_family'],
             'preferred_zip_codes' => ['33101', '33102', '33103'],
             'preferred_states' => ['FL', 'TX'],
+            'asset_classes' => ['sfr', 'commercial'],
         ]);
 
         $response->assertRedirect();
@@ -43,6 +44,13 @@ class BuyerManagementTest extends TestCase
             'address' => '123 Buyer Lane',
             'zip_code' => '30318',
         ]);
+        $buyer = Buyer::where('first_name', 'Jane')->first();
+        $this->assertSame(['sfr', 'commercial'], $buyer->asset_classes);
+        $this->get("/buyers/{$buyer->id}")
+            ->assertOk()
+            ->assertSee('Asset Classes')
+            ->assertSee('SFR')
+            ->assertSee('COMMERCIAL');
     }
 
     public function test_admin_can_create_buyer_with_comma_separated_preferred_states(): void
