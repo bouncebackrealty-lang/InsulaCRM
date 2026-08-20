@@ -6,6 +6,7 @@ use App\Models\Contractor;
 use App\Models\Deal;
 use Carbon\Carbon;
 use Fmt;
+use Illuminate\Support\Facades\Storage;
 
 class DocumentMergeService
 {
@@ -315,6 +316,9 @@ class DocumentMergeService
         $data['company.name'] = $tenant->name ?? '';
         $data['company.email'] = $tenant->email ?? '';
         $data['company.phone'] = $tenant->phone ?? '';
+        $data['company.document_logo_url'] = $tenant?->logo_path
+            ? Storage::disk($tenant->storage_disk ?: config('filesystems.default'))->url($tenant->logo_path)
+            : asset('images/logo.png');
 
         $lender = $deal->lenders->first()?->lender;
         $data['lender.name'] = $lender?->name ?? '';

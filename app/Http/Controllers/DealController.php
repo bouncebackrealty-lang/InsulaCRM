@@ -297,6 +297,41 @@ class DealController extends Controller
         return view('deals.show', compact('deal', 'availableContractors', 'availableLoanPrograms', 'rehabContractors', 'titleCompanies', 'buyers'));
     }
 
+    /**
+     * Permanently remove a deal and its deal-specific files and documents.
+     */
+    public function destroy(Deal $deal)
+    {
+        $this->authorize('delete', $deal);
+
+        $deal->load(['documents', 'generatedDocuments']);
+
+        foreach ($deal->documents as $document) {
+            Storage::disk('local')->delete($document->path);
+        }
+
+        foreach ($deal->generatedDocuments as $document) {
+            if ($document->pdf_path) {
+                Storage::disk('local')->delete($document->pdf_path);
+            }
+        }
+
+        AuditLog::log('deal.deleted', $deal, null, [
+            'title' => $deal->title,
+            'lead_id' => $deal->lead_id,
+        ]);
+
+        // The database cascades the deal's child rows except generated documents
+        // and taggables, which are cleaned up explicitly.
+        $deal->generatedDocuments()->delete();
+        $deal->tags()->detach();
+        $deal->delete();
+
+        return redirect()
+            ->route('pipeline')
+            ->with('success', __('Deal deleted successfully.'));
+    }
+
     public function selectBuyer(Request $request, Deal $deal)
     {
         $this->authorize('update', $deal);

@@ -614,6 +614,7 @@
                         <th>{{ __('Lender') }}</th>
                         <th>{{ __('Deal Type') }}</th>
                         <th>{{ __('Days in Stage') }}</th>
+                        <th class="text-end">{{ __('Actions') }}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -654,6 +655,15 @@
                             <td>{{ $lenderName ?: '-' }}</td>
                             <td>{{ $deal->deal_type_label }}</td>
                             <td>{{ $daysInStage }} {{ __('days') }}</td>
+                            <td class="text-end">
+                                @can('delete', $deal)
+                                    <form action="{{ route('deals.destroy', $deal) }}" method="POST" class="d-inline" onsubmit="return confirm('{{ __('Delete this deal and its attached documents? This cannot be undone.') }}');">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" data-testid="pipeline-delete-deal">{{ __('Delete') }}</button>
+                                    </form>
+                                @endcan
+                            </td>
                         </tr>
                     @endforeach
                 </tbody>
@@ -746,6 +756,14 @@
                                             <a href="#" class="dropdown-item move-stage-btn" data-stage="{{ $moveStageKey }}" data-stage-url="{{ route('deals.updateStage', $deal) }}">{{ $moveStageLabel }}</a>
                                         @endif
                                     @endforeach
+                                    @can('delete', $deal)
+                                        <div class="dropdown-divider"></div>
+                                        <form action="{{ route('deals.destroy', $deal) }}" method="POST" onsubmit="return confirm('{{ __('Delete this deal and its attached documents? This cannot be undone.') }}');">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="dropdown-item text-danger" data-testid="pipeline-delete-deal">{{ __('Delete Deal') }}</button>
+                                        </form>
+                                    @endcan
                                 </div>
                             </div>
                         </div>

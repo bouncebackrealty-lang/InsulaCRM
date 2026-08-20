@@ -22,6 +22,11 @@ class DealPolicy
         return $this->ownsOrCanManage($user, $deal);
     }
 
+    public function delete(User $user, Deal $deal): bool
+    {
+        return $this->ownsOrCanManage($user, $deal);
+    }
+
     public function changeStage(User $user, Deal $deal): bool
     {
         return $this->ownsOrCanManage($user, $deal);
