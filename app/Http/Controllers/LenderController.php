@@ -136,6 +136,9 @@ class LenderController extends Controller
 
     private function normalizeLoanProgramData(array $data, ?string $existingClosingCostType = null): array
     {
+
+        $data['builders_risk_insurance'] = (bool) ($data['builders_risk_insurance'] ?? false);
+
         $data['purchase_closing_cost_type'] = $data['purchase_closing_cost_type']
             ?? $existingClosingCostType
             ?? 'percentage';
