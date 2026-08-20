@@ -95,6 +95,8 @@ document.addEventListener('DOMContentLoaded', function() {
     var clearBtn = document.getElementById('photo-clear-btn');
     var form = document.getElementById('photo-upload-form');
     var submitBtn = document.getElementById('photo-upload-submit');
+    var propertyForm = document.getElementById('property-form');
+    var propertyFormSnapshot = propertyForm ? serialisePropertyForm() : null;
     var selectedFiles = [];
 
     // Click to browse
@@ -183,12 +185,53 @@ document.addEventListener('DOMContentLoaded', function() {
         countLabel.textContent = label;
     }
 
+    function serialisePropertyForm() {
+        if (!propertyForm) {
+            return '';
+        }
+
+        return Array.from(new FormData(propertyForm).entries())
+            .filter(function(entry) { return entry[0] !== '_token'; })
+            .map(function(entry) { return entry[0] + '=' + entry[1]; })
+            .sort()
+            .join('&');
+    }
+
+    function hasUnsavedPropertyChanges() {
+        return propertyForm && serialisePropertyForm() !== propertyFormSnapshot;
+    }
+
+    function savePropertyBeforePhotoUpload() {
+        if (!propertyForm || !hasUnsavedPropertyChanges()) {
+            return Promise.resolve();
+        }
+
+        if (!propertyForm.reportValidity()) {
+            return Promise.reject(new Error('{{ __('Complete the required property fields before uploading photos.') }}'));
+        }
+
+        return fetch(propertyForm.action, {
+            method: 'POST',
+            body: new FormData(propertyForm),
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        }).then(function(response) {
+            if (!response.ok) {
+                throw new Error('{{ __('Property details could not be saved. Please correct the property form and try again.') }}');
+            }
+
+            return response.json();
+        }).then(function() {
+            propertyFormSnapshot = serialisePropertyForm();
+        });
+    }
+
     function uploadSequentially(files) {
         var token = form.querySelector('input[name="_token"]').value;
         var total = files.length;
         var uploaded = 0;
-
-        setUploadingState(true, '{{ __('Uploading photos...') }}');
 
         function sendNext(index) {
             var payload = new FormData();
@@ -222,8 +265,17 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
-        sendNext(0).catch(function() {
-            setUploadingState(false, '{{ __('Upload failed. Please try again.') }}');
+        var beforeUpload = Promise.resolve();
+        if (hasUnsavedPropertyChanges()) {
+            setUploadingState(true, '{{ __('Saving property details...') }}');
+            beforeUpload = savePropertyBeforePhotoUpload();
+        }
+
+        beforeUpload.then(function() {
+            setUploadingState(true, '{{ __('Uploading photos...') }}');
+            return sendNext(0);
+        }).catch(function(error) {
+            setUploadingState(false, error.message || '{{ __('Upload failed. Please try again.') }}');
         });
     }
 
