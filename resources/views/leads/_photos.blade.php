@@ -200,12 +200,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 method: 'POST',
                 body: payload,
                 headers: {
+                    'Accept': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest'
                 }
             }).then(function(response) {
                 if (!response.ok) {
                     throw new Error('Upload failed');
                 }
+
+                return response.json();
+            }).then(function() {
 
                 uploaded++;
                 setUploadingState(true, uploaded + ' / ' + total + ' {{ __('uploaded') }}');

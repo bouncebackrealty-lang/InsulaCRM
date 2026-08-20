@@ -117,9 +117,15 @@ class LeadManagementTest extends TestCase
             ->assertSee($property->address)
             ->assertSee($property->after_repair_value);
 
-        $this->post("/leads/{$lead->id}/photos", [
+        $this->withHeaders([
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ])->post("/leads/{$lead->id}/photos", [
             'photos' => [UploadedFile::fake()->image('front.jpg', 20, 20)],
-        ])->assertRedirect("/leads/{$lead->id}");
+        ])->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('uploaded', 1)
+            ->assertJsonPath('property_id', $property->id);
 
         $this->get("/leads/{$lead->id}")
             ->assertOk()
@@ -266,6 +272,8 @@ class LeadManagementTest extends TestCase
         $response->assertOk();
         $response->assertSee('var selectedFiles = [];', false);
         $response->assertSee("payload.append('photos[]', files[index]);", false);
+        $response->assertSee("'Accept': 'application/json'", false);
+        $response->assertSee('return response.json();', false);
         $response->assertDontSee('fileInput.files = e.dataTransfer.files;', false);
     }
 

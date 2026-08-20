@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\ComparableSale;
+use App\Models\GeneratedDocument;
 use Tests\TestCase;
 
 class PropertyComparableTest extends TestCase
@@ -87,5 +88,33 @@ class PropertyComparableTest extends TestCase
             ->assertRedirect('/properties');
 
         $this->assertDatabaseMissing('properties', ['id' => $property->id]);
+    }
+
+    public function test_deleting_a_property_removes_pipeline_deals_for_the_same_lead(): void
+    {
+        $this->actingAsAdmin();
+        $lead = $this->createLead();
+        $property = $this->createProperty(['lead_id' => $lead->id]);
+        $deal = $this->createDeal([
+            'lead_id' => $lead->id,
+            'title' => 'Pipeline card to remove',
+        ]);
+        $document = GeneratedDocument::create([
+            'tenant_id' => $this->tenant->id,
+            'deal_id' => $deal->id,
+            'user_id' => $this->adminUser->id,
+            'name' => 'Document attached to deleted deal',
+            'content' => '<p>Test</p>',
+        ]);
+
+        $this->delete("/properties/{$property->id}")
+            ->assertRedirect('/properties');
+
+        $this->assertDatabaseMissing('properties', ['id' => $property->id]);
+        $this->assertDatabaseMissing('deals', ['id' => $deal->id]);
+        $this->assertDatabaseMissing('generated_documents', ['id' => $document->id]);
+        $this->get('/pipeline')
+            ->assertOk()
+            ->assertDontSee('Pipeline card to remove');
     }
 }
