@@ -158,9 +158,25 @@ class PropertyController extends Controller
         $this->authorize('delete', $property);
 
         $address = $property->full_address;
+        $deletedDeals = 0;
+
+
+        foreach ($property->lead?->deals()->get() ?? [] as $deal) {
+            AuditLog::log('deal.deleted_with_property', $deal, null, [
+                'property_id' => $property->id,
+                'property_address' => $address,
+            ]);
+            $deal->generatedDocuments()->delete();
+            $deal->tags()->detach();
+            $deal->delete();
+            $deletedDeals++;
+        }
+
         $property->delete();
 
-        AuditLog::log('property.deleted', null, ['address' => $address]);
+        AuditLog::log('property.deleted', null, ['address' => $address], [
+            'deleted_deals' => $deletedDeals,
+        ]);
 
         return redirect()
             ->route('properties.index')

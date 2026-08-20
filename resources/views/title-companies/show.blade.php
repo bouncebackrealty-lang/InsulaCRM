@@ -5,8 +5,18 @@
     <div class="card">
         <div class="card-header">
             <h3 class="card-title">{{ __('Title Company / Closing Attorney') }}</h3>
-            <div class="card-actions"><a class="btn btn-outline-primary"
-                    href="{{ route('title-companies.edit', $titleCompany) }}">{{ __('Edit') }}</a></div>
+            <div class="card-actions">
+                <a class="btn btn-outline-primary"
+                    href="{{ route('title-companies.edit', $titleCompany) }}">{{ __('Edit') }}</a>
+                @can('delete', $titleCompany)
+                    <form method="POST" action="{{ route('title-companies.destroy', $titleCompany) }}" class="d-inline"
+                        onsubmit="return confirm('{{ __('Delete this title company?') }}')">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit" class="btn btn-outline-danger">{{ __('Delete') }}</button>
+                    </form>
+                @endcan
+            </div>
         </div>
         <div class="card-body">
             <div class="datagrid">

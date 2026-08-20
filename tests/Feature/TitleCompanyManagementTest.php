@@ -53,4 +53,26 @@ class TitleCompanyManagementTest extends TestCase
 
         $this->assertNull($deal->fresh()->title_status);
     }
+
+    public function test_admin_can_delete_a_title_company_from_its_list_and_detail_pages(): void
+    {
+        $this->actingAsAdmin();
+        $titleCompany = TitleCompany::create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'Delete Me Title',
+        ]);
+
+        $this->get(route('title-companies.index'))
+            ->assertOk()
+            ->assertSee('Delete Me Title')
+            ->assertSee('Delete');
+        $this->get(route('title-companies.show', $titleCompany))
+            ->assertOk()
+            ->assertSee('Delete');
+
+        $this->delete(route('title-companies.destroy', $titleCompany))
+            ->assertRedirect(route('title-companies.index'));
+
+        $this->assertDatabaseMissing('title_companies', ['id' => $titleCompany->id]);
+    }
 }

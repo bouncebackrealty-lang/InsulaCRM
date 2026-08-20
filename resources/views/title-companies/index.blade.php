@@ -33,8 +33,18 @@
                             <td>{{ $titleCompany->closing_attorney ?: '-' }}</td>
                             <td>{{ $titleCompany->full_address ?: '-' }}</td>
                             <td>{{ $titleCompany->phone ?: $titleCompany->email ?: '-' }}</td>
-                            <td><a class="btn btn-sm btn-outline-primary"
-                                    href="{{ route('title-companies.edit', $titleCompany) }}">{{ __('Edit') }}</a></td>
+                            <td class="text-end">
+                                <a class="btn btn-sm btn-outline-primary"
+                                    href="{{ route('title-companies.edit', $titleCompany) }}">{{ __('Edit') }}</a>
+                                @can('delete', $titleCompany)
+                                    <form method="POST" action="{{ route('title-companies.destroy', $titleCompany) }}" class="d-inline"
+                                        onsubmit="return confirm('{{ __('Delete this title company?') }}')">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">{{ __('Delete') }}</button>
+                                    </form>
+                                @endcan
+                            </td>
                     </tr>@empty<tr>
                             <td colspan="5" class="text-center text-secondary py-4">{{ __('No title companies yet.') }}
                             </td>

@@ -431,6 +431,14 @@ class LeadController extends Controller
             $uploaded++;
         }
 
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'uploaded' => $uploaded,
+                'property_id' => $lead->property()->value('id'),
+            ]);
+        }
+
         return redirect()->route('leads.show', $lead)
             ->with('success', "{$uploaded} photo(s) uploaded.");
     }
