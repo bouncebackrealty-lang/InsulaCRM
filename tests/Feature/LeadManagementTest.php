@@ -129,7 +129,9 @@ class LeadManagementTest extends TestCase
         ])->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('uploaded', 1)
-            ->assertJsonPath('property_id', $property->id);
+            ->assertJsonPath('property_id', $property->id)
+            ->assertJsonPath('photo_count', 1)
+            ->assertJsonPath('photos_html', fn (string $html) => str_contains($html, 'front.jpg'));
 
         $this->get("/leads/{$lead->id}")
             ->assertOk()
@@ -278,8 +280,10 @@ class LeadManagementTest extends TestCase
         $response->assertSee("payload.append('photos[]', files[index]);", false);
         $response->assertSee("'Accept': 'application/json'", false);
         $response->assertSee('return response.json();', false);
-        $response->assertSee('savePropertyBeforePhotoUpload', false);
-        $response->assertSee('Saving property details...', false);
+        $response->assertSee('appendUploadedPhotos', false);
+        $response->assertSee("gallery.insertAdjacentHTML('beforeend', data.photos_html);", false);
+        $response->assertDontSee('savePropertyBeforePhotoUpload', false);
+        $response->assertDontSee('window.location.reload();', false);
         $response->assertDontSee('fileInput.files = e.dataTransfer.files;', false);
     }
 

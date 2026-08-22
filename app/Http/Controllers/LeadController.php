@@ -412,12 +412,12 @@ class LeadController extends Controller
             'captions.*' => 'nullable|string|max:255',
         ]);
 
-        $uploaded = 0;
+        $uploadedPhotos = new \Illuminate\Database\Eloquent\Collection();
         foreach ($request->file('photos') as $i => $file) {
             $filename = uniqid('photo_') . '.' . $file->getClientOriginalExtension();
             $path = $file->storeAs("lead-photos/{$lead->id}", $filename, 'public');
 
-            LeadPhoto::create([
+            $uploadedPhotos->push(LeadPhoto::create([
                 'tenant_id' => auth()->user()->tenant_id,
                 'lead_id' => $lead->id,
                 'uploaded_by' => auth()->id(),
@@ -427,20 +427,26 @@ class LeadController extends Controller
                 'mime_type' => $file->getMimeType(),
                 'size' => $file->getSize(),
                 'caption' => $request->input("captions.{$i}"),
-            ]);
-            $uploaded++;
+            ]));
         }
 
         if ($request->expectsJson()) {
+            $uploadedPhotos->load('uploader');
+
             return response()->json([
                 'success' => true,
-                'uploaded' => $uploaded,
+                'uploaded' => $uploadedPhotos->count(),
                 'property_id' => $lead->property()->value('id'),
+                'photo_count' => $lead->photos()->count(),
+                'photos_html' => view('leads._photo_cards', [
+                    'lead' => $lead,
+                    'photos' => $uploadedPhotos,
+                ])->render(),
             ]);
         }
 
         return redirect()->route('leads.show', $lead)
-            ->with('success', "{$uploaded} photo(s) uploaded.");
+            ->with('success', "{$uploadedPhotos->count()} photo(s) uploaded.");
     }
 
     public function deletePhoto(Lead $lead, LeadPhoto $photo)
