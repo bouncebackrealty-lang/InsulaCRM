@@ -2,46 +2,16 @@
     <div class="card-header">
         <h3 class="card-title">{{ __('Photos') }}</h3>
         <div class="card-actions">
-            <span class="text-secondary">{{ $lead->photos->count() }} {{ __('photo(s)') }}</span>
+            <span class="text-secondary"><span id="photo-total-count">{{ $lead->photos->count() }}</span> {{ __('photo(s)') }}</span>
             <a class="btn btn-ghost-secondary btn-sm" data-bs-toggle="collapse" href="#section-photos" aria-expanded="true" aria-label="{{ __('Toggle section') }}">
                 <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><polyline points="6 9 12 15 18 9"/></svg>
             </a>
         </div>
     </div>
     <div class="card-body collapse show" id="section-photos">
-        @if($lead->photos->count())
-        <div class="row g-2 mb-3" id="photo-gallery">
-            @foreach($lead->photos as $photo)
-            <div class="col-6 col-sm-4 col-md-3">
-                <div class="position-relative" style="border-radius:6px;overflow:hidden;">
-                    <a href="{{ $photo->url }}" target="_blank" class="d-block photo-thumb" data-caption="{{ $photo->caption }}" data-original="{{ $photo->original_name }}">
-                        <img src="{{ $photo->url }}" alt="{{ $photo->caption ?? $photo->original_name }}"
-                             class="w-100" style="height:140px;object-fit:cover;cursor:pointer;border-radius:6px;">
-                    </a>
-                    <form action="{{ route('leads.photos.delete', [$lead, $photo]) }}" method="POST"
-                          class="position-absolute" style="top:4px;right:4px;"
-                          onsubmit="return confirm('{{ __('Delete this photo?') }}')">
-                        @csrf
-                        @method('DELETE')
-                        <button type="submit" class="btn btn-sm btn-icon" style="background:rgba(0,0,0,0.5);border:none;padding:2px 5px;" title="{{ __('Delete') }}">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" stroke-width="2" stroke="#fff" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                        </button>
-                    </form>
-                    @if($photo->caption)
-                    <div class="position-absolute w-100 px-2 py-1" style="bottom:0;left:0;background:rgba(0,0,0,0.55);color:#fff;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                        {{ $photo->caption }}
-                    </div>
-                    @endif
-                </div>
-                <div class="mt-1">
-                    <small class="text-secondary" title="{{ $photo->original_name }}">
-                        {{ $photo->uploader->name ?? __('Unknown') }} &middot; {{ Fmt::date($photo->created_at) }}
-                    </small>
-                </div>
-            </div>
-            @endforeach
+        <div class="row g-2 mb-3" id="photo-gallery" @if(!$lead->photos->count()) style="display:none;" @endif>
+            @include('leads._photo_cards', ['photos' => $lead->photos])
         </div>
-        @endif
 
         <!-- Upload Form -->
         <form action="{{ route('leads.photos.upload', $lead) }}" method="POST" enctype="multipart/form-data" id="photo-upload-form">
@@ -95,8 +65,8 @@ document.addEventListener('DOMContentLoaded', function() {
     var clearBtn = document.getElementById('photo-clear-btn');
     var form = document.getElementById('photo-upload-form');
     var submitBtn = document.getElementById('photo-upload-submit');
-    var propertyForm = document.getElementById('property-form');
-    var propertyFormSnapshot = propertyForm ? serialisePropertyForm() : null;
+    var gallery = document.getElementById('photo-gallery');
+    var totalCount = document.getElementById('photo-total-count');
     var selectedFiles = [];
 
     // Click to browse
@@ -185,47 +155,14 @@ document.addEventListener('DOMContentLoaded', function() {
         countLabel.textContent = label;
     }
 
-    function serialisePropertyForm() {
-        if (!propertyForm) {
-            return '';
+    function appendUploadedPhotos(data) {
+        if (gallery && data.photos_html) {
+            gallery.insertAdjacentHTML('beforeend', data.photos_html);
+            gallery.style.display = 'flex';
         }
-
-        return Array.from(new FormData(propertyForm).entries())
-            .filter(function(entry) { return entry[0] !== '_token'; })
-            .map(function(entry) { return entry[0] + '=' + entry[1]; })
-            .sort()
-            .join('&');
-    }
-
-    function hasUnsavedPropertyChanges() {
-        return propertyForm && serialisePropertyForm() !== propertyFormSnapshot;
-    }
-
-    function savePropertyBeforePhotoUpload() {
-        if (!propertyForm || !hasUnsavedPropertyChanges()) {
-            return Promise.resolve();
+        if (totalCount && typeof data.photo_count !== 'undefined') {
+            totalCount.textContent = data.photo_count;
         }
-
-        if (!propertyForm.reportValidity()) {
-            return Promise.reject(new Error('{{ __('Complete the required property fields before uploading photos.') }}'));
-        }
-
-        return fetch(propertyForm.action, {
-            method: 'POST',
-            body: new FormData(propertyForm),
-            headers: {
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        }).then(function(response) {
-            if (!response.ok) {
-                throw new Error('{{ __('Property details could not be saved. Please correct the property form and try again.') }}');
-            }
-
-            return response.json();
-        }).then(function() {
-            propertyFormSnapshot = serialisePropertyForm();
-        });
     }
 
     function uploadSequentially(files) {
@@ -252,7 +189,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
 
                 return response.json();
-            }).then(function() {
+            }).then(function(data) {
+                appendUploadedPhotos(data);
 
                 uploaded++;
                 setUploadingState(true, uploaded + ' / ' + total + ' {{ __('uploaded') }}');
@@ -261,20 +199,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     return sendNext(index + 1);
                 }
 
-                window.location.reload();
+                fileInput.value = '';
+                selectedFiles = [];
+                previewArea.innerHTML = '';
+                previewArea.style.display = 'none';
+                actions.style.display = 'none';
+                setUploadingState(false, uploaded + ' {{ __('photo(s) uploaded') }}');
             });
         }
 
-        var beforeUpload = Promise.resolve();
-        if (hasUnsavedPropertyChanges()) {
-            setUploadingState(true, '{{ __('Saving property details...') }}');
-            beforeUpload = savePropertyBeforePhotoUpload();
-        }
-
-        beforeUpload.then(function() {
-            setUploadingState(true, '{{ __('Uploading photos...') }}');
-            return sendNext(0);
-        }).catch(function(error) {
+        setUploadingState(true, '{{ __('Uploading photos...') }}');
+        sendNext(0).catch(function(error) {
             setUploadingState(false, error.message || '{{ __('Upload failed. Please try again.') }}');
         });
     }
@@ -282,14 +217,15 @@ document.addEventListener('DOMContentLoaded', function() {
     // Lightbox
     var lightboxModal = document.getElementById('photo-lightbox');
     if (lightboxModal) {
-        document.querySelectorAll('.photo-thumb').forEach(function(link) {
-            link.addEventListener('click', function(e) {
+        gallery?.addEventListener('click', function(e) {
+            var link = e.target.closest('.photo-thumb');
+            if (link) {
                 e.preventDefault();
-                document.getElementById('lightbox-img').src = this.href;
-                var caption = this.dataset.caption || this.dataset.original || '';
+                document.getElementById('lightbox-img').src = link.href;
+                var caption = link.dataset.caption || link.dataset.original || '';
                 document.getElementById('lightbox-caption').textContent = caption;
                 new bootstrap.Modal(lightboxModal).show();
-            });
+            }
         });
     }
 });
