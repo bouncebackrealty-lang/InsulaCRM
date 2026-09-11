@@ -48,6 +48,34 @@ class PropertyComparableTest extends TestCase
         ]);
     }
 
+    public function test_comparable_sales_display_requested_market_data_and_calculated_price_per_sqft(): void
+    {
+        $this->actingAsAdmin();
+        $property = $this->createProperty();
+
+        $this->post("/properties/{$property->id}/comps", [
+            'address' => '100 Market Street',
+            'sale_price' => 300000,
+            'original_list_price' => 325000,
+            'sale_date' => '2026-07-01',
+            'days_on_market' => 14,
+            'sqft' => 1500,
+            'year_built' => 2005,
+        ])->assertRedirect("/properties/{$property->id}");
+
+        $comp = ComparableSale::where('property_id', $property->id)->firstOrFail();
+
+        $this->assertSame(200.0, $comp->sold_price_per_sqft);
+        $this->get("/properties/{$property->id}")
+            ->assertOk()
+            ->assertSee('Year Built')
+            ->assertSee('Original List Price')
+            ->assertSee('DOM')
+            ->assertSee('Sold $/Sq. Ft.')
+            ->assertSee('$325,000.00')
+            ->assertSee('$200.00');
+    }
+
     public function test_property_page_renders_arv_worksheet_with_70_72_and_75_percent_presets(): void
     {
         $this->actingAsAdmin();

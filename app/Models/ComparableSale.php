@@ -15,7 +15,9 @@ class ComparableSale extends Model
         'property_id',
         'address',
         'sale_price',
+        'original_list_price',
         'sale_date',
+        'days_on_market',
         'sqft',
         'beds',
         'baths',
@@ -32,7 +34,9 @@ class ComparableSale extends Model
     {
         return [
             'sale_price' => 'decimal:2',
+            'original_list_price' => 'decimal:2',
             'sale_date' => 'date',
+            'days_on_market' => 'integer',
             'adjustments' => 'array',
             'adjusted_price' => 'decimal:2',
             'baths' => 'decimal:1',
@@ -65,5 +69,17 @@ class ComparableSale extends Model
         $adjustmentTotal = array_sum(array_values($adjustments));
 
         return (float) $this->sale_price + $adjustmentTotal;
+    }
+
+    /**
+     * Calculate the sold price per square foot for display and exports.
+     */
+    public function getSoldPricePerSqftAttribute(): ?float
+    {
+        if (! $this->sqft || (float) $this->sqft <= 0) {
+            return null;
+        }
+
+        return round((float) $this->sale_price / (float) $this->sqft, 2);
     }
 }

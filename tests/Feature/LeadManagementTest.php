@@ -53,6 +53,30 @@ class LeadManagementTest extends TestCase
         ]);
     }
 
+    public function test_lead_numbers_restart_after_all_previous_leads_are_deleted(): void
+    {
+        $this->actingAsAdmin();
+
+        $oldLeads = $this->createLead()->fresh();
+        $secondOldLead = $this->createLead()->fresh();
+
+        $this->assertSame(1, $oldLeads->lead_number);
+        $this->assertSame(2, $secondOldLead->lead_number);
+
+        $oldLeads->delete();
+        $secondOldLead->delete();
+
+        $firstCurrentLead = $this->createLead()->fresh();
+        $secondCurrentLead = $this->createLead()->fresh();
+
+        $this->assertSame(1, $firstCurrentLead->lead_number);
+        $this->assertSame(2, $secondCurrentLead->lead_number);
+
+        $this->get("/leads/{$firstCurrentLead->id}")
+            ->assertOk()
+            ->assertSee('#1');
+    }
+
     public function test_admin_can_attach_property_to_lead_and_access_arv_comps_page(): void
     {
         $this->actingAsAdmin();

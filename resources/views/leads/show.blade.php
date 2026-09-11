@@ -53,7 +53,7 @@
                 <div class="datagrid">
                     <div class="datagrid-item">
                         <div class="datagrid-title">{{ __('Lead ID') }}</div>
-                        <div class="datagrid-content"><code>#{{ $lead->id }}</code></div>
+                        <div class="datagrid-content"><code>#{{ $lead->lead_number ?? $lead->id }}</code></div>
                     </div>
                     <div class="datagrid-item">
                         <div class="datagrid-title">{{ __('Name') }}</div>

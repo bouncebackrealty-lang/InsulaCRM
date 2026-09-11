@@ -11,6 +11,15 @@
 <div class="card">
     <div class="card-header">
         <h3 class="card-title">{{ __('All Activities') }}</h3>
+        @if(auth()->user()->isAdmin())
+        <div class="card-actions">
+            <form method="POST" action="{{ route('activities.clear') }}" onsubmit="return confirm('{{ __('This permanently clears all activity history for this workspace. Continue?') }}')">
+                @csrf
+                @method('DELETE')
+                <button type="submit" class="btn btn-outline-danger btn-sm">{{ __('Clear Activity History') }}</button>
+            </form>
+        </div>
+        @endif
     </div>
     <div class="card-body border-bottom py-3">
         <form method="GET" action="{{ route('activities.index') }}" class="row g-2">

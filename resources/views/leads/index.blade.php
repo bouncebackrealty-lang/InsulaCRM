@@ -167,7 +167,7 @@
                 @forelse($leads as $lead)
                 <tr>
                     <td><input type="checkbox" class="form-check-input lead-checkbox" value="{{ $lead->id }}" aria-label="{{ __('Select') }} {{ $lead->full_name }}"></td>
-                    <td class="text-secondary">{{ $lead->id }}</td>
+                    <td class="text-secondary">{{ $lead->lead_number ?? $lead->id }}</td>
                     <td>
                         <a href="{{ route('leads.show', $lead) }}">{{ $lead->full_name }}</a>
                         @if($lead->do_not_contact)

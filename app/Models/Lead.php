@@ -6,6 +6,7 @@ use App\Models\Scopes\TenantScope;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 
 class Lead extends Model
 {
@@ -13,6 +14,7 @@ class Lead extends Model
 
     protected $fillable = [
         'tenant_id',
+        'lead_number',
         'agent_id',
         'first_name',
         'last_name',
@@ -34,6 +36,7 @@ class Lead extends Model
     protected function casts(): array
     {
         return [
+            'lead_number' => 'integer',
             'do_not_contact' => 'boolean',
             'motivation_score' => 'integer',
             'ai_motivation_score' => 'integer',
@@ -44,6 +47,17 @@ class Lead extends Model
     protected static function booted(): void
     {
         static::addGlobalScope(new TenantScope);
+
+        static::creating(function (Lead $lead): void {
+            if ($lead->lead_number !== null || ! $lead->tenant_id) {
+                return;
+            }
+
+            $lead->lead_number = (int) DB::table('leads')
+                ->where('tenant_id', $lead->tenant_id)
+                ->whereNull('deleted_at')
+                ->max('lead_number') + 1;
+        });
     }
 
     public function getFullNameAttribute(): string

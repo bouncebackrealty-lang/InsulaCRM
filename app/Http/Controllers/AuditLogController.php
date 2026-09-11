@@ -101,4 +101,25 @@ class AuditLogController extends Controller
             'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
     }
+
+    /**
+     * Clear the current tenant's audit history.
+     *
+     * The reset itself is not written back to the audit log so the tenant can
+     * start with a genuinely empty history after clearing demo/test records.
+     */
+    public function clear()
+    {
+        $deleted = AuditLog::withoutGlobalScopes()
+            ->where('tenant_id', auth()->user()->tenant_id)
+            ->delete();
+
+        return redirect()
+            ->route('audit-log.index')
+            ->with('success', trans_choice(
+                ':count audit entry removed.|:count audit entries removed.',
+                $deleted,
+                ['count' => $deleted]
+            ));
+    }
 }

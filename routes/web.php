@@ -478,6 +478,10 @@ Route::middleware(['auth', 'tenant', 'require2fa'])->group(function () {
         // Audit Log
         Route::get('/audit-log/export', [AuditLogController::class, 'export'])->name('audit-log.export');
         Route::get('/audit-log', [AuditLogController::class, 'index'])->name('audit-log.index');
+        Route::delete('/audit-log', [AuditLogController::class, 'clear'])->name('audit-log.clear');
+
+        // Activity history reset for clearing demo/test records
+        Route::delete('/activities', [ActivityInboxController::class, 'clear'])->name('activities.clear');
 
         // AI History
         Route::get('/ai-history', [AiLogController::class, 'index'])->name('ai-log.index');
