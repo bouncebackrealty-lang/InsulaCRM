@@ -73,6 +73,21 @@ class NotificationTest extends TestCase
         $this->assertEquals(0, $this->adminUser->fresh()->unreadNotifications()->count());
     }
 
+    public function test_mark_all_notifications_as_read_redirects_from_the_full_page_form(): void
+    {
+        $this->actingAsAdmin();
+
+        $lead = $this->createLead();
+        $this->adminUser->notify(new LeadAssigned($lead, $this->tenant));
+
+        $response = $this->withHeader('Referer', route('notifications.index'))
+            ->post(route('notifications.markAllRead'));
+
+        $response->assertRedirect(route('notifications.index'));
+        $response->assertSessionHas('success', 'All notifications marked as read.');
+        $this->assertEquals(0, $this->adminUser->fresh()->unreadNotifications()->count());
+    }
+
     public function test_recent_returns_unread_count(): void
     {
         $this->actingAsAdmin();

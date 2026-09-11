@@ -576,7 +576,7 @@
         window.markNotificationRead = function(id) {
             fetch('{{ url("/notifications") }}/' + id + '/read', {
                 method: 'POST',
-                headers: {'X-CSRF-TOKEN': csrfToken}
+                headers: {'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json'}
             });
         };
 
@@ -584,7 +584,7 @@
             e.preventDefault();
             fetch('{{ route('notifications.markAllRead') }}', {
                 method: 'POST',
-                headers: {'X-CSRF-TOKEN': csrfToken}
+                headers: {'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json'}
             }).then(() => {
                 badge.style.display = 'none';
                 markAllBtn.style.display = 'none';
