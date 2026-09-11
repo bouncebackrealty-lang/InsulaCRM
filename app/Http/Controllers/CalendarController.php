@@ -29,6 +29,7 @@ class CalendarController extends Controller
 
         // Tasks
         $tasksQuery = Task::with('lead')
+            ->whereHas('lead')
             ->whereBetween('due_date', [$start, $end]);
 
         if (!$user->isAdmin()) {

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Lead;
 use App\Models\LeadPhoto;
+use App\Models\Task;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
@@ -391,11 +392,49 @@ class LeadManagementTest extends TestCase
     {
         $this->actingAsAdmin();
         $lead = $this->createLead();
+        $task = Task::create([
+            'tenant_id' => $this->tenant->id,
+            'lead_id' => $lead->id,
+            'agent_id' => $this->adminUser->id,
+            'title' => 'Follow up on deleted lead',
+            'due_date' => now()->addDay()->toDateString(),
+            'is_completed' => false,
+        ]);
 
         $response = $this->delete("/leads/{$lead->id}");
 
         $response->assertRedirect('/leads');
         $this->assertSoftDeleted('leads', ['id' => $lead->id]);
+        $this->assertDatabaseMissing('tasks', ['id' => $task->id]);
+    }
+
+    public function test_tasks_for_soft_deleted_leads_are_hidden_from_dashboard_and_calendar(): void
+    {
+        $this->actingAsAdmin();
+        $lead = $this->createLead();
+        $task = Task::create([
+            'tenant_id' => $this->tenant->id,
+            'lead_id' => $lead->id,
+            'agent_id' => $this->adminUser->id,
+            'title' => 'Ghost follow-up task',
+            'due_date' => now()->addDay()->toDateString(),
+            'is_completed' => false,
+        ]);
+
+        // Reproduce stale task data left by a soft-deleted lead on an older
+        // installation, rather than deleting through the fixed controller.
+        $lead->delete();
+
+        $this->get('/dashboard')
+            ->assertOk()
+            ->assertDontSee($task->title);
+
+        $this->getJson(route('calendar.events', [
+            'start' => now()->toDateString(),
+            'end' => now()->addDays(7)->toDateString(),
+        ]))
+            ->assertOk()
+            ->assertJsonMissing(['id' => 'task-' . $task->id]);
     }
 
     public function test_admin_can_update_lead_status_via_ajax(): void
