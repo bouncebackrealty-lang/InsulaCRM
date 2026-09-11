@@ -126,6 +126,10 @@
                     <th>{{ __('Address') }}</th>
                     <th>{{ __('Sale Price') }}</th>
                     <th>{{ __('Date') }}</th>
+                    <th>{{ __('Year Built') }}</th>
+                    <th>{{ __('Original List Price') }}</th>
+                    <th>{{ __('DOM') }}</th>
+                    <th>{{ __('Sold $/Sq. Ft.') }}</th>
                     <th>{{ __('Sqft') }}</th>
                     <th>{{ __('Bed/Bath') }}</th>
                     <th>{{ __('Distance') }}</th>
@@ -141,6 +145,10 @@
                     <td>{{ $comp->address }}</td>
                     <td>{{ Fmt::currency($comp->sale_price) }}</td>
                     <td>{{ $comp->sale_date->format('M d, Y') }}</td>
+                    <td>{{ $comp->year_built ?? '-' }}</td>
+                    <td>{{ $comp->original_list_price !== null ? Fmt::currency($comp->original_list_price) : '-' }}</td>
+                    <td>{{ $comp->days_on_market ?? '-' }}</td>
+                    <td>{{ $comp->sold_price_per_sqft !== null ? Fmt::currency($comp->sold_price_per_sqft, 2) : '-' }}</td>
                     <td>{{ $comp->sqft ? number_format($comp->sqft) : '-' }}</td>
                     <td>{{ $comp->beds ?? '-' }}/{{ $comp->baths ?? '-' }}</td>
                     <td>{{ $comp->distance_miles ? $comp->distance_miles . ' mi' : '-' }}</td>
@@ -210,6 +218,17 @@
                 <div class="col-md-3">
                     <label class="form-label required">{{ __('Sale Date') }}</label>
                     <input type="date" name="sale_date" class="form-control" required id="comp-sale-date">
+                </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-3">
+                    <label class="form-label">{{ __('Original List Price') }}</label>
+                    <input type="number" name="original_list_price" class="form-control" step="0.01" min="0" id="comp-original-list-price">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">{{ __('Days on Market (DOM)') }}</label>
+                    <input type="number" name="days_on_market" class="form-control" min="0" id="comp-days-on-market">
                 </div>
             </div>
 
@@ -399,6 +418,8 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('comp-address').value = comp.address || '';
             document.getElementById('comp-sale-price').value = comp.sale_price || '';
             document.getElementById('comp-sale-date').value = comp.sale_date ? comp.sale_date.substring(0, 10) : '';
+            document.getElementById('comp-original-list-price').value = comp.original_list_price || '';
+            document.getElementById('comp-days-on-market').value = comp.days_on_market || '';
             document.getElementById('comp-sqft').value = comp.sqft || '';
             document.getElementById('comp-beds').value = comp.beds || '';
             document.getElementById('comp-baths').value = comp.baths || '';

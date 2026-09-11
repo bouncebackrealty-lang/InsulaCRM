@@ -20,7 +20,9 @@ class ComparableSaleController extends Controller
         $data = $request->validate([
             'address' => 'required|string|max:255',
             'sale_price' => 'required|numeric|min:0',
+            'original_list_price' => 'nullable|numeric|min:0',
             'sale_date' => 'required|date',
+            'days_on_market' => 'nullable|integer|min:0',
             'sqft' => 'nullable|integer|min:0',
             'beds' => 'nullable|integer|min:0',
             'baths' => 'nullable|numeric|min:0',
@@ -67,7 +69,9 @@ class ComparableSaleController extends Controller
         $data = $request->validate([
             'address' => 'required|string|max:255',
             'sale_price' => 'required|numeric|min:0',
+            'original_list_price' => 'nullable|numeric|min:0',
             'sale_date' => 'required|date',
+            'days_on_market' => 'nullable|integer|min:0',
             'sqft' => 'nullable|integer|min:0',
             'beds' => 'nullable|integer|min:0',
             'baths' => 'nullable|numeric|min:0',

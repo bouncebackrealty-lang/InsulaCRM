@@ -72,4 +72,25 @@ class ActivityInboxController extends Controller
 
         return view('activities.inbox', compact('activities', 'agents', 'activityTypes'));
     }
+
+    /**
+     * Clear the current tenant's activity history.
+     *
+     * This is intentionally admin-only at the route level because it is a
+     * destructive reset intended for clearing demo/test history.
+     */
+    public function clear()
+    {
+        $deleted = Activity::withoutGlobalScopes()
+            ->where('tenant_id', auth()->user()->tenant_id)
+            ->delete();
+
+        return redirect()
+            ->route('activities.index')
+            ->with('success', trans_choice(
+                ':count activity entry removed.|:count activity entries removed.',
+                $deleted,
+                ['count' => $deleted]
+            ));
+    }
 }

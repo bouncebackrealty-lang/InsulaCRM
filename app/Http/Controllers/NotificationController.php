@@ -78,11 +78,17 @@ class NotificationController extends Controller
     }
 
     /**
-     * Mark all notifications as read (AJAX).
+     * Mark all notifications as read.
      */
-    public function markAllAsRead()
+    public function markAllAsRead(Request $request)
     {
         auth()->user()->unreadNotifications->markAsRead();
+
+        if (! $request->expectsJson()) {
+            return redirect()
+                ->back()
+                ->with('success', __('All notifications marked as read.'));
+        }
 
         return response()->json(['success' => true]);
     }

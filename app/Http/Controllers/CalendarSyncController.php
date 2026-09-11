@@ -63,6 +63,7 @@ class CalendarSyncController extends Controller
             ->with('lead')
             ->where('tenant_id', $user->tenant_id)
             ->where('agent_id', $user->id)
+            ->whereHas('lead')
             ->whereBetween('due_date', [$startDate->toDateString(), $endDate->toDateString()])
             ->get();
 
